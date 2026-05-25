@@ -581,53 +581,274 @@ function createSlideMessageBuilder(chapterSummaries, argumentTree) {
   return { slide_messages: slideMessages };
 }
 
-function createSlideLayoutSelector(slideMessages) {
+function findLayout(layoutRegistry, layoutId) {
+  return layoutRegistry.layouts.find((layout) => layout.layout_id === layoutId);
+}
+
+function pickCardsLayout(itemCount) {
+  if (itemCount <= 2) return "cards_2";
+  if (itemCount === 3) return "cards_3";
+  if (itemCount === 4) return "cards_4";
+  return "cards_5";
+}
+
+function selectLayoutId(slide, index, layoutRegistry, chapterLayoutMap) {
+  if (slide.slide_kind === "chapter_summary") {
+    return "chapter_overview";
+  }
+
+  const itemCount = slide.support_points.length;
+  const chapter = chapterLayoutMap.chapters.find((item) => item.chapter === slide.chapter_title || item.chapter === slide.slide_title);
+  const chapterCandidates = chapter?.common_layouts || [];
+
+  if (slide.slide_title.includes("比較") || slide.main_message.includes("比較")) {
+    return findLayout(layoutRegistry, "comparison_2") ? "comparison_2" : "standard_table";
+  }
+  if (slide.slide_title.includes("評価") || slide.main_message.includes("スコア")) {
+    return findLayout(layoutRegistry, "score_table") ? "score_table" : "standard_table";
+  }
+  if (slide.slide_title.includes("リスク")) {
+    return findLayout(layoutRegistry, "risk_table") ? "risk_table" : "standard_table";
+  }
+  if (slide.slide_title.includes("計画") || slide.slide_title.includes("ステップ")) {
+    return findLayout(layoutRegistry, "process_flow_5") ? "process_flow_5" : "standard_table";
+  }
+  if (slide.slide_title.includes("KPI") || slide.main_message.includes("KPI")) {
+    return findLayout(layoutRegistry, "kpi_cards_3") ? "kpi_cards_3" : "cards_3";
+  }
+
+  const cardsLayout = pickCardsLayout(itemCount);
+  if (findLayout(layoutRegistry, cardsLayout)) {
+    return cardsLayout;
+  }
+
+  return chapterCandidates.find((layoutId) => findLayout(layoutRegistry, layoutId)) || "standard_table";
+}
+
+function fitItemsToLayout(items, layout) {
+  const maxItems = layout?.max_items || items.length;
+  const minItems = layout?.min_items || 0;
+  const fitted = items.slice(0, maxItems);
+
+  while (fitted.length < minItems) {
+    fitted.push("補足論点として、根拠確認後に具体的な事実・示唆・実行条件を追記する。");
+  }
+
+  return fitted;
+}
+
+function createSlideLayoutSelector(slideMessages, layoutRegistry, chapterLayoutMap) {
   return {
     slide_layouts: slideMessages.slide_messages.map((slide, index) => {
-      const layoutType = slide.slide_kind === "chapter_summary"
-        ? "chapter_overview"
-        : index % 4 === 0
-          ? "comparison"
-          : index % 4 === 1
-            ? "evidence_table"
-            : index % 4 === 2
-              ? "process"
-              : "key_message";
+      const layoutId = selectLayoutId(slide, index, layoutRegistry, chapterLayoutMap);
+      const layout = findLayout(layoutRegistry, layoutId) || findLayout(layoutRegistry, "standard_table");
 
       return {
         slide_key: `S${String(index + 1).padStart(2, "0")}`,
         chapter_id: slide.chapter_id,
         slide_title: slide.slide_title,
         main_message: slide.main_message,
-        layout_type: layoutType,
+        logical_role: layout?.logical_role || "一覧",
+        family: layout?.family || "tables",
+        layout_id: layout?.layout_id || "standard_table",
+        layout_type: layout?.layout_id || "standard_table",
         layout_reason: slide.slide_kind === "chapter_summary"
           ? "章全体の見取り図を示すため"
-          : "1つの論点と根拠を読みやすく示すため",
-        content_items: slide.support_points
+          : "テーマではなく論理役割と要素数で選定",
+        constraints: {
+          min_items: layout?.min_items || 1,
+          max_items: layout?.max_items || 12,
+          title_max: layout?.title_max || 24,
+          body_max: layout?.body_max || 60,
+          data_required: Boolean(layout?.data_required)
+        },
+        content_items: fitItemsToLayout(slide.support_points, layout)
       };
     })
   };
+}
+
+function truncateText(text, maxChars) {
+  const value = String(text || "");
+  if (!maxChars || value.length <= maxChars) return value;
+  return value.slice(0, Math.max(0, maxChars - 1)) + "…";
+}
+
+function buildStructuredItems(items, bodyMax) {
+  return items.map((item, index) => ({
+    title: truncateText(`論点${index + 1}`, 12),
+    summary: truncateText(item, bodyMax),
+    details: [
+      {
+        point: "理由",
+        description: truncateText(`${item}を支える背景・理由を確認し、企画書上の示唆へ変換する。`, 120)
+      },
+      {
+        point: "示唆",
+        description: truncateText("意思決定者が判断できるよう、根拠確認後に事実と仮説を分けて記載する。", 120)
+      }
+    ]
+  }));
 }
 
 function createSlideJsonBuilder(slideLayouts, evidenceMapping) {
   return {
     slides: slideLayouts.slide_layouts.map((slide, index) => {
       const mapped = evidenceMapping.evidence_mappings.find((item) => item.chapter_id === slide.chapter_id);
+      const titleMax = slide.constraints.title_max;
+      const bodyMax = slide.constraints.body_max;
+      const contentItems = buildStructuredItems(slide.content_items, bodyMax);
       return {
         slide_no: index + 1,
+        chapter: slide.chapter_id,
+        level: slide.layout_id === "chapter_overview" ? "chapter_overview" : "level2",
         slide_title: slide.slide_title,
-        slide_role: slide.layout_type === "chapter_overview" ? "章全体像" : "論点説明",
-        main_message: slide.main_message,
+        slide_role: slide.layout_id === "chapter_overview" ? "章全体像" : "論点説明",
+        main_message: truncateText(slide.main_message, bodyMax),
+        layout_id: slide.layout_id,
+        layout_type: slide.layout_id,
+        logical_role: slide.logical_role,
+        content: {
+          title_box: {
+            text: truncateText(slide.slide_title, titleMax),
+            max_chars: titleMax
+          },
+          message_box: {
+            text: truncateText(slide.main_message, bodyMax),
+            max_chars: bodyMax
+          },
+          lead_box: {
+            text: slide.layout_id === "chapter_overview" ? "この章で証明する流れを整理する。" : "この論点の理由、具体例、示唆を整理する。",
+            max_chars: bodyMax
+          },
+          body_box: {
+            items: contentItems
+          },
+          evidence_box: {
+            sources: mapped?.source_candidates || []
+          },
+          note_box: {
+            text: "単語だけで終えず、タイトル・短文要約・詳細説明を保持する。"
+          }
+        },
         content_items: slide.content_items,
-        layout_type: slide.layout_type,
-        evidence: mapped?.source_candidates || [],
+        evidence: (mapped?.source_candidates || []).map((sourceUrl) => ({
+          fact: "追加確認が必要な根拠候補",
+          source_name: "Web検索候補",
+          source_url: sourceUrl,
+          used_for: slide.main_message
+        })),
+        fit_check: {
+          is_within_title_limit: slide.slide_title.length <= titleMax,
+          is_within_body_limit: slide.content_items.every((item) => item.length <= bodyMax),
+          needs_split: slide.content_items.length > slide.constraints.max_items
+        },
         speaker_note: "1スライド1メッセージを維持し、根拠未確認の箇所は追加調査として扱う。"
       };
     })
   };
 }
 
-function createSlideValidation(slideJson, chapterSummaries) {
+function createLayoutRegistryManager(layoutRegistry) {
+  const seen = new Set();
+  const duplicateLayoutIds = [];
+  const missingRequiredFields = [];
+  const invalidItemRules = [];
+
+  for (const layout of layoutRegistry.layouts) {
+    if (seen.has(layout.layout_id)) duplicateLayoutIds.push(layout.layout_id);
+    seen.add(layout.layout_id);
+
+    for (const field of ["layout_id", "family", "logical_role", "use_case", "min_items", "max_items", "title_max", "body_max", "data_required"]) {
+      if (layout[field] === undefined || layout[field] === null || layout[field] === "") {
+        missingRequiredFields.push({ layout_id: layout.layout_id, field });
+      }
+    }
+    if (Number(layout.min_items) > Number(layout.max_items)) {
+      invalidItemRules.push({ layout_id: layout.layout_id, min_items: layout.min_items, max_items: layout.max_items });
+    }
+  }
+
+  return {
+    registry_check: {
+      is_valid: duplicateLayoutIds.length === 0 && missingRequiredFields.length === 0 && invalidItemRules.length === 0,
+      layout_count: layoutRegistry.layouts.length,
+      duplicate_layout_ids: duplicateLayoutIds,
+      missing_required_fields: missingRequiredFields,
+      invalid_item_rules: invalidItemRules
+    }
+  };
+}
+
+function createContentFitValidator(slideJson, layoutRegistry) {
+  return {
+    fit_results: slideJson.slides.map((slide) => {
+      const layout = findLayout(layoutRegistry, slide.layout_id) || findLayout(layoutRegistry, "standard_table");
+      const items = slide.content?.body_box?.items || [];
+      const issues = [];
+
+      if ((slide.content?.title_box?.text || "").length > layout.title_max) issues.push("title_max_exceeded");
+      if (items.some((item) => (item.summary || "").length > layout.body_max)) issues.push("body_max_exceeded");
+      if (items.length > layout.max_items) issues.push("max_items_exceeded");
+      if (items.length < layout.min_items) issues.push("min_items_shortage");
+      if (layout.data_required && slide.evidence.length === 0) issues.push("data_required_but_missing");
+
+      return {
+        slide_no: slide.slide_no,
+        layout_id: slide.layout_id,
+        is_fit: issues.length === 0,
+        issues,
+        revised_title: truncateText(slide.content?.title_box?.text || slide.slide_title, layout.title_max),
+        revised_items: items.slice(0, layout.max_items).map((item) => ({
+          ...item,
+          summary: truncateText(item.summary, layout.body_max)
+        })),
+        split_required: items.length > layout.max_items,
+        recommended_split: items.length > layout.max_items ? [`${layout.max_items}件以内に分割`] : []
+      };
+    })
+  };
+}
+
+function createExcelExporter(workbookRows) {
+  return {
+    workbook_name: "proposal_story_analysis.xlsx",
+    sheet_count: workbookRows.length,
+    sheets: workbookRows.map((sheet) => ({
+      name: sheet.name,
+      row_count: sheet.rows.length
+    }))
+  };
+}
+
+function createLayoutRegistryCsv(layoutRegistry) {
+  const headers = ["layout_id", "family", "logical_role", "use_case", "min_items", "max_items", "title_max", "body_max", "data_required"];
+  const rows = layoutRegistry.layouts.map((layout) => headers.map((header) => `"${String(layout[header]).replaceAll('"', '""')}"`).join(","));
+  return `${headers.join(",")}\n${rows.join("\n")}\n`;
+}
+
+function createFinalSlidePlan(slideJson, slideLayouts, fitValidation, designReference) {
+  return {
+    design_reference: designReference,
+    slide_count: slideJson.slides.length,
+    slides: slideJson.slides.map((slide) => {
+      const layout = slideLayouts.slide_layouts.find((item) => item.slide_key === `S${String(slide.slide_no).padStart(2, "0")}`);
+      const fit = fitValidation.fit_results.find((item) => item.slide_no === slide.slide_no);
+      return {
+        slide_no: slide.slide_no,
+        layout_id: slide.layout_id,
+        logical_role: slide.logical_role,
+        main_message: slide.main_message,
+        layout_reason: layout?.layout_reason || "",
+        is_fit: fit?.is_fit ?? false,
+        render_status: "renderer_required",
+        fallback_layout_id: slide.layout_id ? "standard_table" : "standard_table"
+      };
+    })
+  };
+}
+
+function createSlideValidation(slideJson, chapterSummaries, layoutRegistry, fitValidation) {
   const chapterIds = new Set(chapterSummaries.chapter_summaries.map((item) => item.chapter_id));
   const summaryChapterIds = new Set(
     slideJson.slides
@@ -639,6 +860,9 @@ function createSlideValidation(slideJson, chapterSummaries) {
       .filter(Boolean)
   );
   const missingSummary = [...chapterIds].filter((chapterId) => !summaryChapterIds.has(chapterId));
+  const layoutIds = new Set(layoutRegistry.layouts.map((layout) => layout.layout_id));
+  const undefinedLayouts = slideJson.slides.filter((slide) => !layoutIds.has(slide.layout_id)).map((slide) => slide.layout_id);
+  const fitIssues = fitValidation.fit_results.filter((result) => !result.is_fit);
 
   return {
     validation_results: [
@@ -654,8 +878,18 @@ function createSlideValidation(slideJson, chapterSummaries) {
       },
       {
         item: "スライドJSON",
-        status: slideJson.slides.every((slide) => slide.slide_no && slide.slide_title && slide.layout_type) ? "ok" : "ng",
+        status: slideJson.slides.every((slide) => slide.slide_no && slide.slide_title && slide.layout_id && slide.content) ? "ok" : "ng",
         comment: "slide-schema の主要項目を確認"
+      },
+      {
+        item: "layout_id",
+        status: undefinedLayouts.length === 0 ? "ok" : "ng",
+        comment: undefinedLayouts.length === 0 ? "全layout_idがregistryに存在" : `未定義: ${undefinedLayouts.join(", ")}`
+      },
+      {
+        item: "文字数・要素数",
+        status: fitIssues.length === 0 ? "ok" : "needs_fix",
+        comment: fitIssues.length === 0 ? "全スライドが制限内" : `${fitIssues.length}枚で収まり調整が必要`
       },
       {
         item: "根拠",
@@ -665,7 +899,9 @@ function createSlideValidation(slideJson, chapterSummaries) {
     ],
     slide_count: slideJson.slides.length,
     chapter_summary_count: summaryChapterIds.size,
-    missing_chapter_summaries: missingSummary
+    missing_chapter_summaries: missingSummary,
+    undefined_layout_ids: undefinedLayouts,
+    fit_issue_count: fitIssues.length
   };
 }
 
@@ -912,11 +1148,27 @@ function createWorkbookRows(input, outputs) {
     },
     {
       name: "17_スライドJSON",
-      rows: [["No", "タイトル", "役割", "メッセージ", "レイアウト", "根拠"], ...outputs.slideJson.slides.map((s) => [s.slide_no, s.slide_title, s.slide_role, s.main_message, s.layout_type, s.evidence.join(" / ")])]
+      rows: [["No", "タイトル", "役割", "メッセージ", "layout_id", "根拠"], ...outputs.slideJson.slides.map((s) => [s.slide_no, s.slide_title, s.slide_role, s.main_message, s.layout_id, s.evidence.map((e) => e.source_url || e.source_name || "").join(" / ")])]
     },
     {
       name: "18_スライド検証",
       rows: [["項目", "状態", "コメント"], ...outputs.slideValidation.validation_results.map((v) => [v.item, v.status, v.comment])]
+    },
+    {
+      name: "19_レイアウト一覧",
+      rows: [["layout_id", "family", "logical_role", "use_case", "min", "max", "title_max", "body_max", "data_required"], ...outputs.layoutRegistry.layouts.map((l) => [l.layout_id, l.family, l.logical_role, l.use_case, l.min_items, l.max_items, l.title_max, l.body_max, l.data_required])]
+    },
+    {
+      name: "20_レイアウト選定",
+      rows: [["slide_key", "章ID", "タイトル", "logical_role", "family", "layout_id", "選定理由", "制約"], ...outputs.slideLayouts.slide_layouts.map((l) => [l.slide_key, l.chapter_id, l.slide_title, l.logical_role, l.family, l.layout_id, l.layout_reason, JSON.stringify(l.constraints)])]
+    },
+    {
+      name: "21_収まり検証",
+      rows: [["No", "layout_id", "fit", "issues", "split_required", "revised_title"], ...outputs.contentFitValidation.fit_results.map((f) => [f.slide_no, f.layout_id, f.is_fit, f.issues.join(" / "), f.split_required, f.revised_title])]
+    },
+    {
+      name: "22_デザイン参照",
+      rows: [["項目", "内容"], ...flattenObject(outputs.designReference)]
     }
   ];
 }
@@ -1078,6 +1330,16 @@ function run() {
   const order = readJson(templateRoot, "config/agent-order.json");
   const storyTypes = readJson(templateRoot, "config/story-types.json");
   const criteria = readJson(templateRoot, "config/evaluation-criteria.json");
+  const layoutRegistry = readJson(templateRoot, "config/layout-registry.json");
+  const layoutSelectionRules = readJson(templateRoot, "config/layout-selection-rules.json");
+  const chapterLayoutMap = readJson(templateRoot, "config/chapter-layout-map.json");
+  const designReference = {
+    file: "templates/proposal-story/assets/design/slide_layout_collection_native.pptx",
+    layout_management_file: "templates/proposal-story/assets/design/proposal_layout_management.xlsx",
+    source: "slide_layout_collection_native.pptx",
+    slide_count: 57,
+    usage: "出力スライドのデザイン参照。Renderer/PPT出力時はこのネイティブPPTXのデザインを優先する。"
+  };
 
   const orchestrator = createOrchestrator(input, order);
   const theme = createThemeInterpreter(input);
@@ -1094,9 +1356,12 @@ function run() {
   const argumentTree = createArgumentBuilder(chapters);
   const evidenceMapping = createEvidenceMapping(argumentTree, evidence, input);
   const slideMessages = createSlideMessageBuilder(chapterSummaries, argumentTree);
-  const slideLayouts = createSlideLayoutSelector(slideMessages);
+  const slideLayouts = createSlideLayoutSelector(slideMessages, layoutRegistry, chapterLayoutMap);
   const slideJson = createSlideJsonBuilder(slideLayouts, evidenceMapping);
-  const slideValidation = createSlideValidation(slideJson, chapterSummaries);
+  const layoutRegistryManager = createLayoutRegistryManager(layoutRegistry);
+  const contentFitValidation = createContentFitValidator(slideJson, layoutRegistry);
+  const slideValidation = createSlideValidation(slideJson, chapterSummaries, layoutRegistry, contentFitValidation);
+  const finalSlidePlan = createFinalSlidePlan(slideJson, slideLayouts, contentFitValidation, designReference);
   const validation = createValidation({ stories, solutions, evidence, evaluation, recommendation, deck, chapters, slideJson, slideValidation });
   const outputs = {
     orchestrator,
@@ -1117,13 +1382,24 @@ function run() {
     slideMessages,
     slideLayouts,
     slideJson,
-    slideValidation
+    slideValidation,
+    layoutRegistry,
+    layoutSelectionRules,
+    chapterLayoutMap,
+    layoutRegistryManager,
+    contentFitValidation,
+    finalSlidePlan,
+    designReference
   };
+  const workbookRows = createWorkbookRows(input, outputs);
+  const excelExporter = createExcelExporter(workbookRows);
+  outputs.excelExporter = excelExporter;
 
   if (checkOnly) {
     console.log("OK: configuration and input files are readable.");
     console.log(`Theme: ${input.theme}`);
     console.log(`Story options: ${stories.story_options.length}`);
+    console.log(`Layouts: ${layoutRegistry.layouts.length}`);
     return;
   }
 
@@ -1153,6 +1429,11 @@ function run() {
       "16_slide_layout_selector.json",
       "17_slide_json_builder.json",
       "18_slide_validation.json",
+      "19_layout_registry_manager.json",
+      "20_content_fit_validator.json",
+      "21_excel_exporter.json",
+      "layout_registry.csv",
+      "final_slide_plan.json",
       "final_report.md",
       "proposal_story_analysis.xlsx",
       "selected_story_review.md"
@@ -1179,10 +1460,15 @@ function run() {
   writeJson(runDir, "16_slide_layout_selector.json", slideLayouts);
   writeJson(runDir, "17_slide_json_builder.json", slideJson);
   writeJson(runDir, "18_slide_validation.json", slideValidation);
+  writeJson(runDir, "19_layout_registry_manager.json", layoutRegistryManager);
+  writeJson(runDir, "20_content_fit_validator.json", contentFitValidation);
+  writeJson(runDir, "21_excel_exporter.json", excelExporter);
+  writeJson(runDir, "final_slide_plan.json", finalSlidePlan);
+  writeText(path.join(runDir, "layout_registry.csv"), createLayoutRegistryCsv(layoutRegistry));
 
   writeText(path.join(runDir, "final_report.md"), createFinalReport(input, outputs));
   writeText(path.join(runDir, "selected_story_review.md"), createApprovalReview(outputs));
-  createXlsx(createWorkbookRows(input, outputs), path.join(runDir, "proposal_story_analysis.xlsx"));
+  createXlsx(workbookRows, path.join(runDir, "proposal_story_analysis.xlsx"));
 
   console.log("Generated proposal story outputs.");
   console.log(`Run folder: ${runDir}`);

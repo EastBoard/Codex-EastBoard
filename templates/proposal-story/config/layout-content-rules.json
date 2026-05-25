@@ -1,0 +1,36 @@
+{
+  "common_rules": [
+    "1スライド = 1メッセージ",
+    "タイトルは結論文にする",
+    "単語だけの表示は禁止",
+    "各要素にはタイトル、短文要約、詳細説明を入れる",
+    "詳細説明は最低2点を基本にする",
+    "根拠が必要な主張にはsource_nameとsource_urlを保持する",
+    "文字数超過時は要約またはスライド分割する"
+  ],
+  "standard_text_boxes": [
+    "title_box",
+    "message_box",
+    "lead_box",
+    "body_box",
+    "example_box",
+    "evidence_box",
+    "note_box",
+    "source_box"
+  ],
+  "item_structure": {
+    "title": "見出し。単語ではなく意味が分かる短文",
+    "summary": "この要素で伝えたい内容を40から80字で要約",
+    "details": [
+      {
+        "point": "視点の見出し",
+        "description": "理由、背景、具体例、示唆を含めて説明"
+      }
+    ]
+  },
+  "fallback": {
+    "unknown_layout_id": "standard_table",
+    "too_many_items": "standard_table",
+    "chart_without_data": "cards_3"
+  }
+}

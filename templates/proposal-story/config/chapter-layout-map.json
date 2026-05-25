@@ -1,0 +1,107 @@
+{
+  "chapters": [
+    {
+      "chapter": "背景",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "big_number",
+        "line_chart",
+        "pest",
+        "3c",
+        "cards_3",
+        "evidence_table"
+      ]
+    },
+    {
+      "chapter": "課題",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "problem_cards_3",
+        "logic_tree",
+        "issue_tree",
+        "funnel",
+        "risk_table"
+      ]
+    },
+    {
+      "chapter": "目的",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "one_message",
+        "pyramid",
+        "kpi_cards_3",
+        "cards_3"
+      ]
+    },
+    {
+      "chapter": "施策・提案",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "solution_cards_3",
+        "process_flow_5",
+        "comparison_3",
+        "4p",
+        "value_proposition_canvas"
+      ]
+    },
+    {
+      "chapter": "比較評価",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "score_table",
+        "priority_matrix",
+        "option_comparison",
+        "dashboard"
+      ]
+    },
+    {
+      "chapter": "推奨案",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "one_message",
+        "pyramid",
+        "before_after",
+        "kpi_cards_3"
+      ]
+    },
+    {
+      "chapter": "実行計画",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "roadmap_quarter",
+        "milestone_plan",
+        "action_plan_table",
+        "process_flow_5"
+      ]
+    },
+    {
+      "chapter": "効果・KPI",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "kpi_cards_4",
+        "dashboard",
+        "line_chart",
+        "bar_chart",
+        "waterfall"
+      ]
+    },
+    {
+      "chapter": "リスク",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "risk_table",
+        "priority_matrix",
+        "cause_effect_flow"
+      ]
+    },
+    {
+      "chapter": "まとめ",
+      "overview_layout": "chapter_overview",
+      "common_layouts": [
+        "title_summary",
+        "one_message",
+        "cards_3"
+      ]
+    }
+  ]
+}

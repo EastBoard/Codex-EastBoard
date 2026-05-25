@@ -4,6 +4,7 @@ Codex 上で使う、プロンプト連続実行型テンプレート集です�
 
 現在は `proposal-story` テンプレートを実装しています。ユーザー入力テーマから、複数の企画書ストーリー案を作り、比較評価し、最も採用しやすい企画書構成へ変換します。
 要件定義2の拡張として、章構造、第二階層/第三階層の論点構造、Web根拠マッピング、1スライド1メッセージのスライドJSON生成まで対応しています。
+要件定義3の拡張として、論理役割別の汎用 `layout_id` レジストリ、文字数・要素数の収まり検証、Renderer参照、PPTXデザイン参照にも対応しています。
 
 ## ディレクトリ構成
 
@@ -36,6 +37,9 @@ outputs/
 10. Markdown と Excel 形式で出力
 11. 章構造、章サマリー、論点構造を生成
 12. スライドメッセージ、レイアウト、スライドJSONを生成
+13. layout_id をレジストリで管理
+14. content_fit_validator で文字数・要素数を検証
+15. 指定PPTXをデザイン参照として保持
 
 ## 使い方
 
@@ -93,6 +97,8 @@ outputs/
         ├── 10_validation.json
         ├── final_report.md
         ├── proposal_story_analysis.xlsx
+        ├── layout_registry.csv
+        ├── final_slide_plan.json
         └── selected_story_review.md
 ```
 

@@ -26,5 +26,8 @@ npm run start
 18. スライドレイアウトを選定する
 19. スライドJSONを生成する
 20. スライド構造を検証する
-21. `outputs/proposal-story/YYYYMMDD_HHMMSS/` フォルダを作成する
-22. Markdown、Excel、承認用ファイルを同じ出力フォルダへ保存する
+21. layout-registry.json の整合性を検証する
+22. 文字数・要素数の収まりを検証する
+23. Excel出力シート構成を生成する
+24. `outputs/proposal-story/YYYYMMDD_HHMMSS/` フォルダを作成する
+25. Markdown、Excel、承認用ファイル、layout_registry.csv、final_slide_plan.json を同じ出力フォルダへ保存する

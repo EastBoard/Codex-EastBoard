@@ -1,0 +1,119 @@
+{
+  "principle": "テーマではなく論理役割と要素数でlayout_idを選ぶ",
+  "rules": [
+    {
+      "condition": "章の冒頭で全体像を示す",
+      "layout_id": "chapter_overview"
+    },
+    {
+      "condition": "要点が2個",
+      "layout_id": "cards_2"
+    },
+    {
+      "condition": "要点が3個",
+      "layout_id": "cards_3"
+    },
+    {
+      "condition": "要点が4個",
+      "layout_id": "cards_4"
+    },
+    {
+      "condition": "要点が5個",
+      "layout_id": "cards_5"
+    },
+    {
+      "condition": "2案比較",
+      "layout_id": "comparison_2"
+    },
+    {
+      "condition": "3案比較",
+      "layout_id": "comparison_3"
+    },
+    {
+      "condition": "現状と理想の比較",
+      "layout_id": "as_is_to_be"
+    },
+    {
+      "condition": "改善前後を示す",
+      "layout_id": "before_after"
+    },
+    {
+      "condition": "原因を分解する",
+      "layout_id": "logic_tree"
+    },
+    {
+      "condition": "論点を分解する",
+      "layout_id": "issue_tree"
+    },
+    {
+      "condition": "結論理由根拠を示す",
+      "layout_id": "pyramid"
+    },
+    {
+      "condition": "顧客行動を示す",
+      "layout_id": "user_journey"
+    },
+    {
+      "condition": "時系列や計画を示す",
+      "layout_id": "timeline_5"
+    },
+    {
+      "condition": "市場規模や成果を強調する",
+      "layout_id": "big_number"
+    },
+    {
+      "condition": "推移データがある",
+      "layout_id": "line_chart"
+    },
+    {
+      "condition": "カテゴリ比較データがある",
+      "layout_id": "bar_chart"
+    },
+    {
+      "condition": "構成比がある",
+      "layout_id": "pie_chart"
+    },
+    {
+      "condition": "複数案をスコア評価する",
+      "layout_id": "score_table"
+    },
+    {
+      "condition": "施策の優先順位を示す",
+      "layout_id": "priority_matrix"
+    },
+    {
+      "condition": "外部環境を整理する",
+      "layout_id": "pest"
+    },
+    {
+      "condition": "市場・競合・自社を整理する",
+      "layout_id": "3c"
+    },
+    {
+      "condition": "マーケ施策を整理する",
+      "layout_id": "4p"
+    },
+    {
+      "condition": "価値提案を整理する",
+      "layout_id": "value_proposition_canvas"
+    }
+  ],
+  "fallback": [
+    {
+      "case": "要素数が多すぎる",
+      "action": "standard_tableへ逃がす、または複数スライドへ分割"
+    },
+    {
+      "case": "本文が長すぎる",
+      "action": "content_fit_validatorで要約し、body_max以内へ圧縮"
+    },
+    {
+      "case": "データがないのにグラフ系が選ばれた",
+      "action": "cardsまたはtableへ変更"
+    },
+    {
+      "case": "layout_idが未定義",
+      "action": "standard_tableへフォールバック"
+    }
+  ]
+}

@@ -7,6 +7,8 @@
   "agent_order": "config/agent-order.json",
   "command": "commands/run-proposal-story.md",
   "output_dir": "outputs/proposal-story",
+  "design_reference": "assets/design/slide_layout_collection_native.pptx",
+  "layout_management_reference": "assets/design/proposal_layout_management.xlsx",
   "outputs": [
     "run_manifest.json",
     "00_orchestrator.json",
@@ -28,6 +30,11 @@
     "16_slide_layout_selector.json",
     "17_slide_json_builder.json",
     "18_slide_validation.json",
+    "19_layout_registry_manager.json",
+    "20_content_fit_validator.json",
+    "21_excel_exporter.json",
+    "layout_registry.csv",
+    "final_slide_plan.json",
     "final_report.md",
     "proposal_story_analysis.xlsx",
     "selected_story_review.md"

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LayoutSchema",
+  "type": "object",
+  "required": [
+    "layout_id",
+    "family",
+    "logical_role",
+    "use_case",
+    "min_items",
+    "max_items",
+    "title_max",
+    "body_max"
+  ],
+  "properties": {
+    "layout_id": {
+      "type": "string"
+    },
+    "family": {
+      "type": "string"
+    },
+    "logical_role": {
+      "type": "string"
+    },
+    "use_case": {
+      "type": "string"
+    },
+    "min_items": {
+      "type": "integer"
+    },
+    "max_items": {
+      "type": "integer"
+    },
+    "title_max": {
+      "type": "integer"
+    },
+    "body_max": {
+      "type": "integer"
+    },
+    "data_required": {
+      "type": "boolean"
+    }
+  }
+}

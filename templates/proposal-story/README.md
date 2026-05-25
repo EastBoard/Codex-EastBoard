@@ -34,6 +34,20 @@
 - 各章の冒頭に章全体像スライドを置きます。
 - 1スライド = 1メッセージを固定します。
 - スライドJSONは `schemas/slide-schema.json` に合わせます。
+- `layout_id` は `config/layout-registry.json` に定義されたものだけを使います。
+- レイアウトはテーマではなく、論理役割と要素数で選びます。
+- 文字数・要素数は `20_content_fit_validator` で検証します。
+- デザイン参照は `assets/design/slide_layout_collection_native.pptx` です。
+
+## レイアウト関連ファイル
+
+- `config/layout-registry.json`
+- `config/layout-selection-rules.json`
+- `config/chapter-layout-map.json`
+- `config/layout-content-rules.json`
+- `schemas/layout-schema.json`
+- `schemas/slide-schema.json`
+- `renderer/SlideRenderer.tsx`
 
 ## 出力
 

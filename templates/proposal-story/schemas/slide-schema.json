@@ -1,10 +1,66 @@
 {
-  "slide_no": 1,
-  "slide_title": "",
-  "slide_role": "",
-  "main_message": "",
-  "content_items": [],
-  "layout_type": "",
-  "evidence": [],
-  "speaker_note": ""
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SlideSchema",
+  "type": "object",
+  "required": [
+    "slide_no",
+    "chapter",
+    "level",
+    "slide_role",
+    "main_message",
+    "layout_id",
+    "content",
+    "evidence"
+  ],
+  "properties": {
+    "slide_no": {
+      "type": "integer"
+    },
+    "chapter": {
+      "type": "string"
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "chapter_overview",
+        "level2",
+        "level3",
+        "evidence",
+        "evaluation",
+        "recommendation"
+      ]
+    },
+    "slide_role": {
+      "type": "string"
+    },
+    "main_message": {
+      "type": "string"
+    },
+    "layout_id": {
+      "type": "string"
+    },
+    "content": {
+      "type": "object"
+    },
+    "evidence": {
+      "type": "array"
+    },
+    "speaker_note": {
+      "type": "string"
+    },
+    "fit_check": {
+      "type": "object",
+      "properties": {
+        "is_within_title_limit": {
+          "type": "boolean"
+        },
+        "is_within_body_limit": {
+          "type": "boolean"
+        },
+        "needs_split": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
 }

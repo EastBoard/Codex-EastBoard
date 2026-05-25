@@ -17,7 +17,12 @@
     "15_slide_message_builder.json",
     "16_slide_layout_selector.json",
     "17_slide_json_builder.json",
-    "18_slide_validation.json"
+    "18_slide_validation.json",
+    "19_layout_registry_manager.json",
+    "20_content_fit_validator.json",
+    "21_excel_exporter.json",
+    "layout_registry.csv",
+    "final_slide_plan.json"
   ],
   "report_outputs": [
     "outputs/proposal-story/YYYYMMDD_HHMMSS/final_report.md",

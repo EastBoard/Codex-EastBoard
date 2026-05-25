@@ -18,6 +18,9 @@
     "15_slide_message_builder",
     "16_slide_layout_selector",
     "17_slide_json_builder",
-    "18_slide_validation"
+    "18_slide_validation",
+    "19_layout_registry_manager",
+    "20_content_fit_validator",
+    "21_excel_exporter"
   ]
 }
