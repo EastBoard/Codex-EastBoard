@@ -46,10 +46,28 @@ npm run start
 
 ## 出力
 
-- `outputs/final_report.md`
-- `outputs/proposal_story_analysis.xlsx`
-- `outputs/01_theme_interpreter.json` から `outputs/10_validation.json`
-- `PendingApproval/selected_story_review.md`
+実行ごとに、秒まで含むフォルダ名で一式を保存します。
+
+```txt
+outputs/
+└── YYYYMMDD_HHMMSS/
+    ├── run_manifest.json
+    ├── 00_orchestrator.json
+    ├── 01_theme_interpreter.json
+    ├── ...
+    ├── 10_validation.json
+    ├── final_report.md
+    ├── proposal_story_analysis.xlsx
+    └── selected_story_review.md
+```
+
+例:
+
+```txt
+outputs/20260525_101234/final_report.md
+outputs/20260525_101234/proposal_story_analysis.xlsx
+outputs/20260525_101234/selected_story_review.md
+```
 
 ## 注意
 

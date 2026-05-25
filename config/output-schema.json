@@ -12,10 +12,10 @@
     "10_validation.json"
   ],
   "report_outputs": [
-    "final_report.md",
-    "proposal_story_analysis.xlsx"
+    "outputs/YYYYMMDD_HHMMSS/final_report.md",
+    "outputs/YYYYMMDD_HHMMSS/proposal_story_analysis.xlsx"
   ],
   "approval_outputs": [
-    "PendingApproval/selected_story_review.md"
+    "outputs/YYYYMMDD_HHMMSS/selected_story_review.md"
   ]
 }

@@ -3,8 +3,7 @@ import path from "node:path";
 import { Buffer } from "node:buffer";
 
 const root = process.cwd();
-const outputDir = path.join(root, "outputs");
-const approvalDir = path.join(root, "PendingApproval");
+const outputBaseDir = path.join(root, "outputs");
 const checkOnly = process.argv.includes("--check");
 
 function readJson(relativePath) {
@@ -12,12 +11,11 @@ function readJson(relativePath) {
 }
 
 function ensureDirs() {
-  fs.mkdirSync(outputDir, { recursive: true });
-  fs.mkdirSync(approvalDir, { recursive: true });
+  fs.mkdirSync(outputBaseDir, { recursive: true });
 }
 
-function writeJson(fileName, data) {
-  fs.writeFileSync(path.join(outputDir, fileName), `${JSON.stringify(data, null, 2)}\n`, "utf8");
+function writeJson(dir, fileName, data) {
+  fs.writeFileSync(path.join(dir, fileName), `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
 function writeText(filePath, content) {
@@ -27,6 +25,37 @@ function writeText(filePath, content) {
 
 function asText(value, fallback = "") {
   return value === undefined || value === null || value === "" ? fallback : String(value);
+}
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function timestampForFolder(date = new Date()) {
+  return [
+    date.getFullYear(),
+    pad2(date.getMonth() + 1),
+    pad2(date.getDate())
+  ].join("") + "_" + [
+    pad2(date.getHours()),
+    pad2(date.getMinutes()),
+    pad2(date.getSeconds())
+  ].join("");
+}
+
+function createRunDir() {
+  const baseName = timestampForFolder();
+  let name = baseName;
+  let index = 1;
+
+  while (fs.existsSync(path.join(outputBaseDir, name))) {
+    index += 1;
+    name = `${baseName}_${pad2(index)}`;
+  }
+
+  const runDir = path.join(outputBaseDir, name);
+  fs.mkdirSync(runDir, { recursive: true });
+  return { runId: name, runDir };
 }
 
 function searchUrl(query) {
@@ -61,9 +90,9 @@ function createOrchestrator(input, order) {
     agent_order: order.order,
     required_outputs: [
       "agent json files",
-      "outputs/final_report.md",
-      "outputs/proposal_story_analysis.xlsx",
-      "PendingApproval/selected_story_review.md"
+      "outputs/YYYYMMDD_HHMMSS/final_report.md",
+      "outputs/YYYYMMDD_HHMMSS/proposal_story_analysis.xlsx",
+      "outputs/YYYYMMDD_HHMMSS/selected_story_review.md"
     ],
     quality_checks: [
       "最低3つのストーリー案がある",
@@ -775,26 +804,51 @@ function run() {
     return;
   }
 
-  writeJson("00_orchestrator.json", orchestrator);
-  writeJson("01_theme_interpreter.json", theme);
-  writeJson("02_environment_research.json", environment);
-  writeJson("03_issue_objective.json", issue);
-  writeJson("04_story_generator.json", stories);
-  writeJson("05_solution_generator.json", solutions);
-  writeJson("06_evidence_research.json", evidence);
-  writeJson("07_evaluation.json", evaluation);
-  writeJson("08_recommendation.json", recommendation);
-  writeJson("09_deck_outline.json", deck);
-  writeJson("10_validation.json", validation);
+  const { runId, runDir } = createRunDir();
+  const manifest = {
+    run_id: runId,
+    created_at: new Date().toISOString(),
+    input_theme: input.theme,
+    files: [
+      "00_orchestrator.json",
+      "01_theme_interpreter.json",
+      "02_environment_research.json",
+      "03_issue_objective.json",
+      "04_story_generator.json",
+      "05_solution_generator.json",
+      "06_evidence_research.json",
+      "07_evaluation.json",
+      "08_recommendation.json",
+      "09_deck_outline.json",
+      "10_validation.json",
+      "final_report.md",
+      "proposal_story_analysis.xlsx",
+      "selected_story_review.md"
+    ]
+  };
 
-  writeText(path.join(outputDir, "final_report.md"), createFinalReport(input, outputs));
-  writeText(path.join(approvalDir, "selected_story_review.md"), createApprovalReview(outputs));
-  createXlsx(createWorkbookRows(input, outputs), path.join(outputDir, "proposal_story_analysis.xlsx"));
+  writeJson(runDir, "run_manifest.json", manifest);
+  writeJson(runDir, "00_orchestrator.json", orchestrator);
+  writeJson(runDir, "01_theme_interpreter.json", theme);
+  writeJson(runDir, "02_environment_research.json", environment);
+  writeJson(runDir, "03_issue_objective.json", issue);
+  writeJson(runDir, "04_story_generator.json", stories);
+  writeJson(runDir, "05_solution_generator.json", solutions);
+  writeJson(runDir, "06_evidence_research.json", evidence);
+  writeJson(runDir, "07_evaluation.json", evaluation);
+  writeJson(runDir, "08_recommendation.json", recommendation);
+  writeJson(runDir, "09_deck_outline.json", deck);
+  writeJson(runDir, "10_validation.json", validation);
+
+  writeText(path.join(runDir, "final_report.md"), createFinalReport(input, outputs));
+  writeText(path.join(runDir, "selected_story_review.md"), createApprovalReview(outputs));
+  createXlsx(createWorkbookRows(input, outputs), path.join(runDir, "proposal_story_analysis.xlsx"));
 
   console.log("Generated proposal story outputs.");
-  console.log(`- ${path.join(outputDir, "final_report.md")}`);
-  console.log(`- ${path.join(outputDir, "proposal_story_analysis.xlsx")}`);
-  console.log(`- ${path.join(approvalDir, "selected_story_review.md")}`);
+  console.log(`Run folder: ${runDir}`);
+  console.log(`- ${path.join(runDir, "final_report.md")}`);
+  console.log(`- ${path.join(runDir, "proposal_story_analysis.xlsx")}`);
+  console.log(`- ${path.join(runDir, "selected_story_review.md")}`);
 }
 
 run();

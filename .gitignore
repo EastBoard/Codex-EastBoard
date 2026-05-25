@@ -1,7 +1,5 @@
 node_modules/
-outputs/*.json
-outputs/*.md
-outputs/*.xlsx
+outputs/*
 !outputs/.gitkeep
 PendingApproval/*.md
 !PendingApproval/.gitkeep
