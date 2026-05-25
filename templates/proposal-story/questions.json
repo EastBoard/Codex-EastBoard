@@ -1,0 +1,50 @@
+{
+  "template_id": "proposal-story",
+  "questions": [
+    {
+      "id": "theme",
+      "label": "テーマ",
+      "question": "企画書で扱いたいテーマは何ですか？",
+      "required": true,
+      "target_path": "theme"
+    },
+    {
+      "id": "target_reader",
+      "label": "想定読者",
+      "question": "誰に意思決定してもらう企画書ですか？",
+      "required": true,
+      "target_path": "target_reader",
+      "default": "経営者・決裁者・事業責任者"
+    },
+    {
+      "id": "proposal_goal",
+      "label": "目的",
+      "question": "この企画書で得たい判断・承認は何ですか？",
+      "required": true,
+      "target_path": "proposal_goal",
+      "default": "企画書で意思決定を得る"
+    },
+    {
+      "id": "industry",
+      "label": "業界",
+      "question": "対象業界があれば教えてください。",
+      "required": false,
+      "target_path": "industry"
+    },
+    {
+      "id": "company_context",
+      "label": "自社状況",
+      "question": "自社の前提、強み、制約があれば教えてください。",
+      "required": false,
+      "target_path": "company_context"
+    },
+    {
+      "id": "region",
+      "label": "対象地域",
+      "question": "対象地域はどこですか？",
+      "required": false,
+      "target_path": "constraints.region",
+      "default": "日本"
+    }
+  ]
+}

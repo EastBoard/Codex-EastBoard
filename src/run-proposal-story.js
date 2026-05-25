@@ -8,6 +8,23 @@ const templateId = "proposal-story";
 const templateRoot = path.join(root, "templates", templateId);
 const outputBaseDir = path.join(root, "outputs", templateId);
 const checkOnly = process.argv.includes("--check");
+const phaseArg = readArg("--phase", "all");
+const runDirArg = readArg("--run-dir", "") || readPositionalRunDir();
+
+function readArg(name, fallback = "") {
+  const index = process.argv.indexOf(name);
+  return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
+}
+
+function readPositionalRunDir() {
+  if (!process.argv.includes("--phase") || phaseArg !== "slides") return "";
+  const candidates = process.argv.slice(2).filter((arg, index, args) => {
+    if (arg.startsWith("--")) return false;
+    if (args[index - 1] === "--phase") return false;
+    return true;
+  });
+  return candidates[0] || "";
+}
 
 function readJson(baseDir, relativePath) {
   return JSON.parse(fs.readFileSync(path.join(baseDir, relativePath), "utf8"));
@@ -1503,8 +1520,7 @@ function createPptxFromTemplate(slideJson, templatePath, outputPath) {
   };
 }
 
-function run() {
-  ensureDirs();
+function loadRuntimeConfig() {
   const input = normalizeInput(readJson(templateRoot, "inputs/user-theme.json"));
   const order = readJson(templateRoot, "config/agent-order.json");
   const storyTypes = readJson(templateRoot, "config/story-types.json");
@@ -1520,7 +1536,11 @@ function run() {
     slide_count: 57,
     usage: "出力スライドのデザイン参照。Renderer/PPT出力時はこのネイティブPPTXのデザインを優先する。"
   };
+  return { input, order, storyTypes, criteria, layoutRegistry, layoutSelectionRules, chapterLayoutMap, designReference };
+}
 
+function buildOutputs(config) {
+  const { input, order, storyTypes, criteria, layoutRegistry, layoutSelectionRules, chapterLayoutMap, designReference } = config;
   const orchestrator = createOrchestrator(input, order);
   const theme = createThemeInterpreter(input);
   const environment = createEnvironmentResearch(input);
@@ -1574,78 +1594,94 @@ function run() {
   const workbookRows = createWorkbookRows(input, outputs);
   const excelExporter = createExcelExporter(workbookRows);
   outputs.excelExporter = excelExporter;
+  return { input, outputs, workbookRows };
+}
 
-  if (checkOnly) {
-    console.log("OK: configuration and input files are readable.");
-    console.log(`Theme: ${input.theme}`);
-    console.log(`Story options: ${stories.story_options.length}`);
-    console.log(`Layouts: ${layoutRegistry.layouts.length}`);
-    return;
-  }
+function analysisFiles() {
+  return [
+    "00_orchestrator.json",
+    "01_theme_interpreter.json",
+    "02_environment_research.json",
+    "03_issue_objective.json",
+    "04_story_generator.json",
+    "05_solution_generator.json",
+    "06_evidence_research.json",
+    "07_evaluation.json",
+    "08_recommendation.json",
+    "09_deck_outline.json",
+    "10_validation.json",
+    "11_chapter_designer.json",
+    "12_chapter_summary.json",
+    "13_argument_builder.json",
+    "14_evidence_mapping.json",
+    "15_slide_message_builder.json",
+    "16_slide_layout_selector.json",
+    "17_slide_json_builder.json",
+    "18_slide_validation.json",
+    "19_layout_registry_manager.json",
+    "20_content_fit_validator.json",
+    "21_excel_exporter.json",
+    "layout_registry.csv",
+    "final_slide_plan.json",
+    "final_report.md",
+    "proposal_story_analysis.xlsx",
+    "selected_story_review.md"
+  ];
+}
 
-  const { runId, runDir } = createRunDir();
+function slideFiles() {
+  return [
+    "22_powerpoint_exporter.json",
+    "proposal_story_slides.pptx"
+  ];
+}
+
+function writeAnalysisOutputs(runDir, input, outputs, workbookRows, phase) {
   const manifest = {
-    run_id: runId,
+    run_id: path.basename(runDir),
     template_id: templateId,
+    phase,
     created_at: new Date().toISOString(),
     input_theme: input.theme,
-    files: [
-      "00_orchestrator.json",
-      "01_theme_interpreter.json",
-      "02_environment_research.json",
-      "03_issue_objective.json",
-      "04_story_generator.json",
-      "05_solution_generator.json",
-      "06_evidence_research.json",
-      "07_evaluation.json",
-      "08_recommendation.json",
-      "09_deck_outline.json",
-      "10_validation.json",
-      "11_chapter_designer.json",
-      "12_chapter_summary.json",
-      "13_argument_builder.json",
-      "14_evidence_mapping.json",
-      "15_slide_message_builder.json",
-      "16_slide_layout_selector.json",
-      "17_slide_json_builder.json",
-      "18_slide_validation.json",
-      "19_layout_registry_manager.json",
-      "20_content_fit_validator.json",
-      "21_excel_exporter.json",
-      "layout_registry.csv",
-      "final_slide_plan.json",
-      "proposal_story_slides.pptx",
-      "final_report.md",
-      "proposal_story_analysis.xlsx",
-      "selected_story_review.md"
-    ]
+    files: phase === "analysis" ? analysisFiles() : [...analysisFiles(), ...slideFiles()]
   };
 
   writeJson(runDir, "run_manifest.json", manifest);
-  writeJson(runDir, "00_orchestrator.json", orchestrator);
-  writeJson(runDir, "01_theme_interpreter.json", theme);
-  writeJson(runDir, "02_environment_research.json", environment);
-  writeJson(runDir, "03_issue_objective.json", issue);
-  writeJson(runDir, "04_story_generator.json", stories);
-  writeJson(runDir, "05_solution_generator.json", solutions);
-  writeJson(runDir, "06_evidence_research.json", evidence);
-  writeJson(runDir, "07_evaluation.json", evaluation);
-  writeJson(runDir, "08_recommendation.json", recommendation);
-  writeJson(runDir, "09_deck_outline.json", deck);
-  writeJson(runDir, "10_validation.json", validation);
-  writeJson(runDir, "11_chapter_designer.json", chapters);
-  writeJson(runDir, "12_chapter_summary.json", chapterSummaries);
-  writeJson(runDir, "13_argument_builder.json", argumentTree);
-  writeJson(runDir, "14_evidence_mapping.json", evidenceMapping);
-  writeJson(runDir, "15_slide_message_builder.json", slideMessages);
-  writeJson(runDir, "16_slide_layout_selector.json", slideLayouts);
-  writeJson(runDir, "17_slide_json_builder.json", slideJson);
-  writeJson(runDir, "18_slide_validation.json", slideValidation);
-  writeJson(runDir, "19_layout_registry_manager.json", layoutRegistryManager);
-  writeJson(runDir, "20_content_fit_validator.json", contentFitValidation);
-  writeJson(runDir, "21_excel_exporter.json", excelExporter);
-  writeJson(runDir, "final_slide_plan.json", finalSlidePlan);
-  writeText(path.join(runDir, "layout_registry.csv"), createLayoutRegistryCsv(layoutRegistry));
+  writeJson(runDir, "00_orchestrator.json", outputs.orchestrator);
+  writeJson(runDir, "01_theme_interpreter.json", outputs.theme);
+  writeJson(runDir, "02_environment_research.json", outputs.environment);
+  writeJson(runDir, "03_issue_objective.json", outputs.issue);
+  writeJson(runDir, "04_story_generator.json", outputs.stories);
+  writeJson(runDir, "05_solution_generator.json", outputs.solutions);
+  writeJson(runDir, "06_evidence_research.json", outputs.evidence);
+  writeJson(runDir, "07_evaluation.json", outputs.evaluation);
+  writeJson(runDir, "08_recommendation.json", outputs.recommendation);
+  writeJson(runDir, "09_deck_outline.json", outputs.deck);
+  writeJson(runDir, "10_validation.json", outputs.validation);
+  writeJson(runDir, "11_chapter_designer.json", outputs.chapters);
+  writeJson(runDir, "12_chapter_summary.json", outputs.chapterSummaries);
+  writeJson(runDir, "13_argument_builder.json", outputs.argumentTree);
+  writeJson(runDir, "14_evidence_mapping.json", outputs.evidenceMapping);
+  writeJson(runDir, "15_slide_message_builder.json", outputs.slideMessages);
+  writeJson(runDir, "16_slide_layout_selector.json", outputs.slideLayouts);
+  writeJson(runDir, "17_slide_json_builder.json", outputs.slideJson);
+  writeJson(runDir, "18_slide_validation.json", outputs.slideValidation);
+  writeJson(runDir, "19_layout_registry_manager.json", outputs.layoutRegistryManager);
+  writeJson(runDir, "20_content_fit_validator.json", outputs.contentFitValidation);
+  writeJson(runDir, "21_excel_exporter.json", outputs.excelExporter);
+  writeJson(runDir, "final_slide_plan.json", outputs.finalSlidePlan);
+  writeText(path.join(runDir, "layout_registry.csv"), createLayoutRegistryCsv(outputs.layoutRegistry));
+  writeText(path.join(runDir, "final_report.md"), createFinalReport(input, outputs));
+  writeText(path.join(runDir, "selected_story_review.md"), createApprovalReview(outputs));
+  createXlsx(workbookRows, path.join(runDir, "proposal_story_analysis.xlsx"));
+}
+
+function exportSlides(runDir) {
+  const slideJsonPath = path.join(runDir, "17_slide_json_builder.json");
+  if (!fs.existsSync(slideJsonPath)) {
+    throw new Error(`Slide JSON not found. Run analysis first: ${slideJsonPath}`);
+  }
+  const slideJson = JSON.parse(fs.readFileSync(slideJsonPath, "utf8"));
   const pptxExport = createPptxFromTemplate(
     slideJson,
     path.join(templateRoot, "assets/design/slide_layout_collection_native.pptx"),
@@ -1653,15 +1689,63 @@ function run() {
   );
   writeJson(runDir, "22_powerpoint_exporter.json", pptxExport);
 
-  writeText(path.join(runDir, "final_report.md"), createFinalReport(input, outputs));
-  writeText(path.join(runDir, "selected_story_review.md"), createApprovalReview(outputs));
-  createXlsx(workbookRows, path.join(runDir, "proposal_story_analysis.xlsx"));
+  const manifestPath = path.join(runDir, "run_manifest.json");
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const files = new Set([...(manifest.files || []), ...slideFiles()]);
+    manifest.phase = "slides";
+    manifest.slides_exported_at = new Date().toISOString();
+    manifest.files = [...files];
+    writeJson(runDir, "run_manifest.json", manifest);
+  }
+
+  return pptxExport;
+}
+
+function run() {
+  ensureDirs();
+  const config = loadRuntimeConfig();
+  const { input, outputs, workbookRows } = buildOutputs(config);
+
+  if (checkOnly) {
+    console.log("OK: configuration and input files are readable.");
+    console.log(`Theme: ${input.theme}`);
+    console.log(`Story options: ${outputs.stories.story_options.length}`);
+    console.log(`Layouts: ${config.layoutRegistry.layouts.length}`);
+    return;
+  }
+
+  if (phaseArg === "slides") {
+    if (!runDirArg) {
+      throw new Error("Missing --run-dir for --phase slides");
+    }
+    const targetRunDir = path.resolve(root, runDirArg);
+    const pptxExport = exportSlides(targetRunDir);
+    console.log("Generated PowerPoint output.");
+    console.log(`Run folder: ${targetRunDir}`);
+    console.log(`- ${path.join(targetRunDir, pptxExport.file_name)}`);
+    return;
+  }
+
+  const { runDir } = createRunDir();
+  writeAnalysisOutputs(runDir, input, outputs, workbookRows, phaseArg === "analysis" ? "analysis" : "all");
+
+  if (phaseArg === "all") {
+    exportSlides(runDir);
+  } else if (phaseArg !== "analysis") {
+    throw new Error(`Unknown phase: ${phaseArg}`);
+  }
 
   console.log("Generated proposal story outputs.");
   console.log(`Run folder: ${runDir}`);
   console.log(`- ${path.join(runDir, "final_report.md")}`);
   console.log(`- ${path.join(runDir, "proposal_story_analysis.xlsx")}`);
-  console.log(`- ${path.join(runDir, "proposal_story_slides.pptx")}`);
+  if (phaseArg === "all") {
+    console.log(`- ${path.join(runDir, "proposal_story_slides.pptx")}`);
+  } else {
+    console.log("Slide phase is pending. Run:");
+    console.log(`npm run slides:proposal-story -- ${path.relative(root, runDir)}`);
+  }
   console.log(`- ${path.join(runDir, "selected_story_review.md")}`);
 }
 

@@ -1,0 +1,28 @@
+{
+  "template_id": "proposal-story",
+  "phases": [
+    {
+      "id": "analysis",
+      "name": "企画書設計・Excel出力",
+      "description": "テーマ解釈、調査観点、複数ストーリー案、比較評価、推奨案、章構造、Excel管理表までを生成する。",
+      "requires_confirmation": false,
+      "command": "npm run analysis:proposal-story",
+      "outputs": [
+        "final_report.md",
+        "proposal_story_analysis.xlsx",
+        "selected_story_review.md"
+      ]
+    },
+    {
+      "id": "slides",
+      "name": "スライド作成・PowerPoint出力",
+      "description": "分析フェーズのスライドJSONをもとに、指定PPTXデザインでPowerPointを生成する。",
+      "requires_confirmation": true,
+      "confirmation_question": "スライド作成まで進めますか？",
+      "command": "npm run slides:proposal-story -- --run-dir <analysis_run_dir>",
+      "outputs": [
+        "proposal_story_slides.pptx"
+      ]
+    }
+  ]
+}

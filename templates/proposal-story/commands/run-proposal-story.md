@@ -1,5 +1,19 @@
 # 実行コマンド
 
+## Phase 1: 企画書設計・Excel出力
+
+```bash
+npm run analysis:proposal-story
+```
+
+## Phase 2: スライド作成・PowerPoint出力
+
+```bash
+npm run slides:proposal-story -- --run-dir outputs/proposal-story/YYYYMMDD_HHMMSS
+```
+
+## 一括実行
+
 ```bash
 npm run start
 ```

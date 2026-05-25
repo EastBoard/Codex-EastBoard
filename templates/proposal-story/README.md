@@ -5,6 +5,18 @@
 ## 入力
 
 - `inputs/user-theme.json`
+- `questions.json`: Codexがユーザーに質問する項目
+- `phases.json`: Excelまでの分析フェーズと、確認後のスライド作成フェーズ
+
+## 推奨実行フロー
+
+1. Codexがテンプレート一覧を提示します。
+2. ユーザーが `proposal-story` を選びます。
+3. Codexが `questions.json` に沿ってテーマ、読者、目的などを質問します。
+4. 回答を `inputs/user-theme.json` に反映します。
+5. `npm run analysis:proposal-story` でExcel出力まで実行します。
+6. Codexが「スライド作成まで進めますか？」と確認します。
+7. Yesの場合、`npm run slides:proposal-story -- --run-dir <analysis_run_dir>` でPowerPointを生成します。
 
 ## エージェント
 

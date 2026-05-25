@@ -5,6 +5,8 @@
   "version": "1.0.0",
   "input": "inputs/user-theme.json",
   "agent_order": "config/agent-order.json",
+  "questions": "questions.json",
+  "phases": "phases.json",
   "command": "commands/run-proposal-story.md",
   "output_dir": "outputs/proposal-story",
   "design_reference": "assets/design/slide_layout_collection_native.pptx",

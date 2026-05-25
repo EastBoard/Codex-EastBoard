@@ -56,6 +56,18 @@ npm run start
 npm run run:proposal-story
 ```
 
+実運用では2フェーズ実行を推奨します。
+
+```bash
+npm run analysis:proposal-story
+```
+
+Excelと確認用ファイルを見て、スライド作成まで進める場合だけ以下を実行します。
+
+```bash
+npm run slides:proposal-story -- --run-dir outputs/proposal-story/YYYYMMDD_HHMMSS
+```
+
 将来テンプレートが増えた場合は、共通入口として以下を使います。
 
 ```bash
@@ -118,6 +130,8 @@ outputs/proposal-story/20260525_101234/selected_story_review.md
 ```txt
 templates/<template-id>/
 ├── template.json
+├── questions.json
+├── phases.json
 ├── README.md
 ├── agents/
 ├── commands/
