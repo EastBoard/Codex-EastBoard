@@ -49,6 +49,14 @@
 - `schemas/slide-schema.json`
 - `renderer/SlideRenderer.tsx`
 
+## PowerPoint出力
+
+`npm run start` 実行時に、`proposal_story_slides.pptx` を同じ出力フォルダへ生成します。
+
+- 元デザイン: `assets/design/slide_layout_collection_native.pptx`
+- 方式: `layout_id` に対応する元PPTX内スライドを複製し、テキストを差し替え
+- 未対応 `layout_id`: `standard_table` へフォールバック
+
 ## 出力
 
 `outputs/proposal-story/YYYYMMDD_HHMMSS/` に一式を保存します。

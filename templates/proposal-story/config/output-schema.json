@@ -21,12 +21,15 @@
     "19_layout_registry_manager.json",
     "20_content_fit_validator.json",
     "21_excel_exporter.json",
+    "22_powerpoint_exporter.json",
     "layout_registry.csv",
-    "final_slide_plan.json"
+    "final_slide_plan.json",
+    "proposal_story_slides.pptx"
   ],
   "report_outputs": [
     "outputs/proposal-story/YYYYMMDD_HHMMSS/final_report.md",
-    "outputs/proposal-story/YYYYMMDD_HHMMSS/proposal_story_analysis.xlsx"
+    "outputs/proposal-story/YYYYMMDD_HHMMSS/proposal_story_analysis.xlsx",
+    "outputs/proposal-story/YYYYMMDD_HHMMSS/proposal_story_slides.pptx"
   ],
   "approval_outputs": [
     "outputs/proposal-story/YYYYMMDD_HHMMSS/selected_story_review.md"

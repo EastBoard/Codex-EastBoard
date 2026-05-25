@@ -33,8 +33,10 @@
     "19_layout_registry_manager.json",
     "20_content_fit_validator.json",
     "21_excel_exporter.json",
+    "22_powerpoint_exporter.json",
     "layout_registry.csv",
     "final_slide_plan.json",
+    "proposal_story_slides.pptx",
     "final_report.md",
     "proposal_story_analysis.xlsx",
     "selected_story_review.md"

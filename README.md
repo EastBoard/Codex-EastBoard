@@ -97,6 +97,7 @@ outputs/
         ├── 10_validation.json
         ├── final_report.md
         ├── proposal_story_analysis.xlsx
+        ├── proposal_story_slides.pptx
         ├── layout_registry.csv
         ├── final_slide_plan.json
         └── selected_story_review.md

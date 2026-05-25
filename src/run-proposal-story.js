@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Buffer } from "node:buffer";
+import zlib from "node:zlib";
 
 const root = process.cwd();
 const templateId = "proposal-story";
@@ -1324,6 +1325,184 @@ function createXlsx(sheets, filePath) {
   fs.writeFileSync(filePath, zip(files));
 }
 
+function unzipEntries(buffer) {
+  const entries = [];
+  let offset = 0;
+
+  while (offset < buffer.length - 4) {
+    if (buffer.readUInt32LE(offset) !== 0x04034b50) {
+      offset += 1;
+      continue;
+    }
+
+    const method = buffer.readUInt16LE(offset + 8);
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const uncompressedSize = buffer.readUInt32LE(offset + 22);
+    const nameLength = buffer.readUInt16LE(offset + 26);
+    const extraLength = buffer.readUInt16LE(offset + 28);
+    const name = buffer.slice(offset + 30, offset + 30 + nameLength).toString();
+    const dataStart = offset + 30 + nameLength + extraLength;
+    const compressedData = buffer.slice(dataStart, dataStart + compressedSize);
+    const data = method === 8 ? zlib.inflateRawSync(compressedData) : compressedData;
+
+    entries.push({ name, data, uncompressedSize });
+    offset = dataStart + compressedSize;
+  }
+
+  return entries;
+}
+
+function zipBuffers(files) {
+  const mod = dosDateTime();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const data = Buffer.isBuffer(file.content) ? file.content : Buffer.from(file.content, "utf8");
+    const crc = crc32(data);
+    const local = localFileHeader(file.name, data, crc, mod);
+    localParts.push(local, data);
+    centralParts.push(centralDirectoryHeader(file.name, data, crc, offset, mod));
+    offset += local.length + data.length;
+  }
+
+  const central = Buffer.concat(centralParts);
+  return Buffer.concat([...localParts, central, endCentralDirectory(files.length, central.length, offset)]);
+}
+
+function decodeXmlText(value) {
+  return value
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'")
+    .replaceAll("&amp;", "&");
+}
+
+function replaceSlideTextXml(xml, chunks) {
+  let index = 0;
+  return xml.replace(/<a:t>([\s\S]*?)<\/a:t>/g, () => {
+    const text = index < chunks.length ? chunks[index] : "";
+    index += 1;
+    return `<a:t>${xmlEscape(text)}</a:t>`;
+  });
+}
+
+function slideTextChunks(slide) {
+  const items = slide.content?.body_box?.items || [];
+  const sources = slide.evidence?.map((item) => item.source_url).filter(Boolean) || [];
+  const chunks = [
+    slide.content?.title_box?.text || slide.slide_title || slide.main_message,
+    `layout_id: ${slide.layout_id} / ${slide.slide_role}`,
+    slide.content?.message_box?.text || slide.main_message,
+    slide.content?.lead_box?.text || ""
+  ];
+
+  for (const item of items) {
+    chunks.push(item.title || "");
+    chunks.push(item.summary || "");
+    for (const detail of item.details || []) {
+      chunks.push(`▶ ${detail.point}: ${detail.description}`);
+    }
+  }
+
+  if (sources.length > 0) {
+    chunks.push("SOURCE");
+    chunks.push(sources.slice(0, 3).join(" / "));
+  }
+
+  chunks.push(slide.speaker_note || "");
+  return chunks;
+}
+
+function buildTemplateSlideMap(entries) {
+  const map = new Map();
+  for (const entry of entries) {
+    const match = entry.name.match(/^ppt\/slides\/slide(\d+)\.xml$/);
+    if (!match) continue;
+    const xml = entry.data.toString();
+    const text = [...xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)]
+      .map((item) => decodeXmlText(item[1]))
+      .join(" ");
+    const layoutMatch = text.match(/layout_id:\s*([A-Za-z0-9_]+)/) || text.match(/\(([A-Za-z0-9_]+)\)/);
+    if (layoutMatch) {
+      map.set(layoutMatch[1], Number(match[1]));
+    }
+  }
+  return map;
+}
+
+function relationshipXml(id, target) {
+  return `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="${target}"/>`;
+}
+
+function createPptxFromTemplate(slideJson, templatePath, outputPath) {
+  const templateBuffer = fs.readFileSync(templatePath);
+  const entries = unzipEntries(templateBuffer);
+  const entryMap = new Map(entries.map((entry) => [entry.name, entry]));
+  const slideMap = buildTemplateSlideMap(entries);
+  const fallbackSlideNo = slideMap.get("standard_table") || slideMap.get("cards_3") || 1;
+  const slideCount = slideJson.slides.length;
+  const outputFiles = [];
+
+  for (const entry of entries) {
+    if (/^ppt\/slides\/slide\d+\.xml$/.test(entry.name)) continue;
+    if (/^ppt\/slides\/_rels\/slide\d+\.xml\.rels$/.test(entry.name)) continue;
+    if (entry.name === "ppt/presentation.xml") continue;
+    if (entry.name === "ppt/_rels/presentation.xml.rels") continue;
+    if (entry.name === "[Content_Types].xml") continue;
+    outputFiles.push({ name: entry.name, content: entry.data });
+  }
+
+  for (const [index, slide] of slideJson.slides.entries()) {
+    const sourceSlideNo = slideMap.get(slide.layout_id) || fallbackSlideNo;
+    const sourceSlide = entryMap.get(`ppt/slides/slide${sourceSlideNo}.xml`);
+    const sourceRels = entryMap.get(`ppt/slides/_rels/slide${sourceSlideNo}.xml.rels`);
+    const newSlideNo = index + 1;
+    const xml = replaceSlideTextXml(sourceSlide.data.toString(), slideTextChunks(slide));
+    outputFiles.push({ name: `ppt/slides/slide${newSlideNo}.xml`, content: xml });
+    if (sourceRels) {
+      outputFiles.push({ name: `ppt/slides/_rels/slide${newSlideNo}.xml.rels`, content: sourceRels.data });
+    }
+  }
+
+  const originalPresentation = entryMap.get("ppt/presentation.xml").data.toString();
+  const slideIds = slideJson.slides
+    .map((_, index) => `<p:sldId id="${256 + index}" r:id="rIdSlide${index + 1}"/>`)
+    .join("");
+  const presentationXml = originalPresentation.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, `<p:sldIdLst>${slideIds}</p:sldIdLst>`);
+
+  const originalPresentationRels = entryMap.get("ppt/_rels/presentation.xml.rels").data.toString();
+  const nonSlideRels = [...originalPresentationRels.matchAll(/<Relationship\b[^>]*\/>/g)]
+    .map((item) => item[0])
+    .filter((rel) => !rel.includes("/relationships/slide\""));
+  const slideRels = slideJson.slides
+    .map((_, index) => relationshipXml(`rIdSlide${index + 1}`, `slides/slide${index + 1}.xml`));
+  const presentationRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${[...nonSlideRels, ...slideRels].join("")}</Relationships>`;
+
+  const originalContentTypes = entryMap.get("[Content_Types].xml").data.toString();
+  const slideOverrides = slideJson.slides
+    .map((_, index) => `<Override PartName="/ppt/slides/slide${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`)
+    .join("");
+  const contentTypesXml = originalContentTypes
+    .replace(/<Override PartName="\/ppt\/slides\/slide\d+\.xml" ContentType="application\/vnd\.openxmlformats-officedocument\.presentationml\.slide\+xml"\/>/g, "")
+    .replace("</Types>", `${slideOverrides}</Types>`);
+
+  outputFiles.push({ name: "[Content_Types].xml", content: contentTypesXml });
+  outputFiles.push({ name: "ppt/presentation.xml", content: presentationXml });
+  outputFiles.push({ name: "ppt/_rels/presentation.xml.rels", content: presentationRelsXml });
+
+  fs.writeFileSync(outputPath, zipBuffers(outputFiles));
+  return {
+    file_name: path.basename(outputPath),
+    slide_count: slideCount,
+    template_slide_count: slideMap.size,
+    design_template: templatePath,
+    export_strategy: "layout_idに対応する指定PPTX内スライドを複製し、テキストを差し替え"
+  };
+}
+
 function run() {
   ensureDirs();
   const input = normalizeInput(readJson(templateRoot, "inputs/user-theme.json"));
@@ -1336,6 +1515,7 @@ function run() {
   const designReference = {
     file: "templates/proposal-story/assets/design/slide_layout_collection_native.pptx",
     layout_management_file: "templates/proposal-story/assets/design/proposal_layout_management.xlsx",
+    pptx_output_file: "proposal_story_slides.pptx",
     source: "slide_layout_collection_native.pptx",
     slide_count: 57,
     usage: "出力スライドのデザイン参照。Renderer/PPT出力時はこのネイティブPPTXのデザインを優先する。"
@@ -1434,6 +1614,7 @@ function run() {
       "21_excel_exporter.json",
       "layout_registry.csv",
       "final_slide_plan.json",
+      "proposal_story_slides.pptx",
       "final_report.md",
       "proposal_story_analysis.xlsx",
       "selected_story_review.md"
@@ -1465,6 +1646,12 @@ function run() {
   writeJson(runDir, "21_excel_exporter.json", excelExporter);
   writeJson(runDir, "final_slide_plan.json", finalSlidePlan);
   writeText(path.join(runDir, "layout_registry.csv"), createLayoutRegistryCsv(layoutRegistry));
+  const pptxExport = createPptxFromTemplate(
+    slideJson,
+    path.join(templateRoot, "assets/design/slide_layout_collection_native.pptx"),
+    path.join(runDir, "proposal_story_slides.pptx")
+  );
+  writeJson(runDir, "22_powerpoint_exporter.json", pptxExport);
 
   writeText(path.join(runDir, "final_report.md"), createFinalReport(input, outputs));
   writeText(path.join(runDir, "selected_story_review.md"), createApprovalReview(outputs));
@@ -1474,6 +1661,7 @@ function run() {
   console.log(`Run folder: ${runDir}`);
   console.log(`- ${path.join(runDir, "final_report.md")}`);
   console.log(`- ${path.join(runDir, "proposal_story_analysis.xlsx")}`);
+  console.log(`- ${path.join(runDir, "proposal_story_slides.pptx")}`);
   console.log(`- ${path.join(runDir, "selected_story_review.md")}`);
 }
 
