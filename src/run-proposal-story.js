@@ -435,6 +435,240 @@ function createDeckOutline(input, recommendation) {
   };
 }
 
+function createChapterDesigner(input, issue, recommendation) {
+  const recommended = recommendation.recommended_story;
+  const chapters = [
+    {
+      chapter_id: "C1",
+      chapter_title: "背景",
+      chapter_summary: `${input.theme}に取り組むべき外部環境の変化を示す。`,
+      chapter_message: "市場・顧客・競合・技術の変化により、今取り組む理由が生まれている。",
+      level2_arguments: ["市場変化", "顧客変化", "競合変化", "技術変化"],
+      required_evidence: ["市場規模", "成長率", "顧客ニーズ調査", "競合事例"]
+    },
+    {
+      chapter_id: "C2",
+      chapter_title: "課題",
+      chapter_summary: "環境変化から、企画書で解くべき課題を整理する。",
+      chapter_message: issue.core_message,
+      level2_arguments: issue.issues.map((item) => item.issue),
+      required_evidence: ["現状課題", "業務影響", "顧客課題", "競合比較"]
+    },
+    {
+      chapter_id: "C3",
+      chapter_title: "提案",
+      chapter_summary: "推奨ストーリーと採用施策を、課題に対応する提案として示す。",
+      chapter_message: recommended.core_proposal_message,
+      level2_arguments: recommended.selected_solutions.map((item) => item.solution_name),
+      required_evidence: ["導入事例", "施策効果", "実行条件"]
+    },
+    {
+      chapter_id: "C4",
+      chapter_title: "効果",
+      chapter_summary: "採用した場合の期待効果と評価指標を示す。",
+      chapter_message: "KPIで成果を測定し、短期検証から中長期展開へつなげる。",
+      level2_arguments: ["短期成果", "投資対効果", "中長期拡張性"],
+      required_evidence: ["KPI実績", "ROI事例", "効果測定方法"]
+    },
+    {
+      chapter_id: "C5",
+      chapter_title: "実行計画",
+      chapter_summary: "承認後の進め方、体制、リスク対応を示す。",
+      chapter_message: recommended.decision_request,
+      level2_arguments: ["実行ステップ", "必要体制", "主要リスクと対応策"],
+      required_evidence: ["導入期間", "必要リソース", "リスク事例"]
+    }
+  ];
+
+  return { chapters };
+}
+
+function createChapterSummary(chapterDesign) {
+  return {
+    chapter_summaries: chapterDesign.chapters.map((chapter) => ({
+      chapter_id: chapter.chapter_id,
+      chapter_title: chapter.chapter_title,
+      summary_slide_title: `第${chapter.chapter_id.slice(1)}章 ${chapter.chapter_title}の全体像`,
+      one_slide_message: chapter.chapter_message,
+      overview_points: chapter.level2_arguments.slice(0, 5),
+      next_slides: chapter.level2_arguments.map((argument, index) => ({
+        slide_key: `${chapter.chapter_id}-${index + 1}`,
+        message: argument
+      }))
+    }))
+  };
+}
+
+function createArgumentBuilder(chapterDesign) {
+  return {
+    argument_tree: chapterDesign.chapters.map((chapter) => ({
+      chapter_id: chapter.chapter_id,
+      chapter_title: chapter.chapter_title,
+      chapter_message: chapter.chapter_message,
+      arguments: chapter.level2_arguments.map((level2, index) => ({
+        level2_id: `${chapter.chapter_id}-L2-${index + 1}`,
+        level2,
+        message: `${chapter.chapter_title}では「${level2}」を独立した論点として示す。`,
+        level3: [
+          {
+            level3_id: `${chapter.chapter_id}-L2-${index + 1}-E1`,
+            message: `${level2}を裏づける定量情報を確認する`,
+            evidence_type: chapter.required_evidence[index % chapter.required_evidence.length] || "Webエビデンス"
+          },
+          {
+            level3_id: `${chapter.chapter_id}-L2-${index + 1}-E2`,
+            message: `${level2}を説明する企業事例・具体例を確認する`,
+            evidence_type: "事例・具体例"
+          }
+        ]
+      }))
+    }))
+  };
+}
+
+function createEvidenceMapping(argumentTree, evidenceResearch, input) {
+  const evidenceItems = evidenceResearch.evidence_items;
+  let fallbackIndex = 0;
+
+  return {
+    evidence_mappings: argumentTree.argument_tree.flatMap((chapter) =>
+      chapter.arguments.map((argument) => {
+        const evidence = evidenceItems[fallbackIndex % evidenceItems.length];
+        fallbackIndex += 1;
+        const query = buildSearchQuery(input.theme, `${chapter.chapter_title} ${argument.level2}`);
+        return {
+          chapter_id: chapter.chapter_id,
+          level2_id: argument.level2_id,
+          level2: argument.level2,
+          required_evidence: argument.level3.map((item) => item.evidence_type),
+          mapped_evidence_ids: evidence ? [evidence.evidence_id] : [],
+          source_candidates: evidence ? [evidence.source_url, searchUrl(query)] : [searchUrl(query)],
+          evidence_status: "requires_confirmation",
+          note: "初期実装では検索候補を紐づける。実調査後に出典URLへ置換する。"
+        };
+      })
+    )
+  };
+}
+
+function createSlideMessageBuilder(chapterSummaries, argumentTree) {
+  const slideMessages = [];
+
+  for (const chapter of chapterSummaries.chapter_summaries) {
+    slideMessages.push({
+      slide_kind: "chapter_summary",
+      chapter_id: chapter.chapter_id,
+      slide_title: chapter.summary_slide_title,
+      main_message: chapter.one_slide_message,
+      support_points: chapter.overview_points,
+      one_message_check: true
+    });
+
+    const argumentsForChapter = argumentTree.argument_tree.find((item) => item.chapter_id === chapter.chapter_id)?.arguments || [];
+    for (const argument of argumentsForChapter) {
+      slideMessages.push({
+        slide_kind: "argument",
+        chapter_id: chapter.chapter_id,
+        level2_id: argument.level2_id,
+        slide_title: argument.level2,
+        main_message: argument.message,
+        support_points: argument.level3.map((item) => item.message),
+        one_message_check: true
+      });
+    }
+  }
+
+  return { slide_messages: slideMessages };
+}
+
+function createSlideLayoutSelector(slideMessages) {
+  return {
+    slide_layouts: slideMessages.slide_messages.map((slide, index) => {
+      const layoutType = slide.slide_kind === "chapter_summary"
+        ? "chapter_overview"
+        : index % 4 === 0
+          ? "comparison"
+          : index % 4 === 1
+            ? "evidence_table"
+            : index % 4 === 2
+              ? "process"
+              : "key_message";
+
+      return {
+        slide_key: `S${String(index + 1).padStart(2, "0")}`,
+        chapter_id: slide.chapter_id,
+        slide_title: slide.slide_title,
+        main_message: slide.main_message,
+        layout_type: layoutType,
+        layout_reason: slide.slide_kind === "chapter_summary"
+          ? "章全体の見取り図を示すため"
+          : "1つの論点と根拠を読みやすく示すため",
+        content_items: slide.support_points
+      };
+    })
+  };
+}
+
+function createSlideJsonBuilder(slideLayouts, evidenceMapping) {
+  return {
+    slides: slideLayouts.slide_layouts.map((slide, index) => {
+      const mapped = evidenceMapping.evidence_mappings.find((item) => item.chapter_id === slide.chapter_id);
+      return {
+        slide_no: index + 1,
+        slide_title: slide.slide_title,
+        slide_role: slide.layout_type === "chapter_overview" ? "章全体像" : "論点説明",
+        main_message: slide.main_message,
+        content_items: slide.content_items,
+        layout_type: slide.layout_type,
+        evidence: mapped?.source_candidates || [],
+        speaker_note: "1スライド1メッセージを維持し、根拠未確認の箇所は追加調査として扱う。"
+      };
+    })
+  };
+}
+
+function createSlideValidation(slideJson, chapterSummaries) {
+  const chapterIds = new Set(chapterSummaries.chapter_summaries.map((item) => item.chapter_id));
+  const summaryChapterIds = new Set(
+    slideJson.slides
+      .filter((slide) => slide.slide_role === "章全体像")
+      .map((slide) => {
+        const match = slide.slide_title.match(/第(\d+)章/);
+        return match ? `C${match[1]}` : "";
+      })
+      .filter(Boolean)
+  );
+  const missingSummary = [...chapterIds].filter((chapterId) => !summaryChapterIds.has(chapterId));
+
+  return {
+    validation_results: [
+      {
+        item: "1スライド1メッセージ",
+        status: slideJson.slides.every((slide) => Boolean(slide.main_message)) ? "ok" : "ng",
+        comment: "全スライドに main_message を設定"
+      },
+      {
+        item: "章サマリー",
+        status: missingSummary.length === 0 ? "ok" : "needs_fix",
+        comment: missingSummary.length === 0 ? "全章に章全体像スライドあり" : `不足: ${missingSummary.join(", ")}`
+      },
+      {
+        item: "スライドJSON",
+        status: slideJson.slides.every((slide) => slide.slide_no && slide.slide_title && slide.layout_type) ? "ok" : "ng",
+        comment: "slide-schema の主要項目を確認"
+      },
+      {
+        item: "根拠",
+        status: "needs_research",
+        comment: "検索候補は紐づけ済み。実URLへの置換は追加調査が必要"
+      }
+    ],
+    slide_count: slideJson.slides.length,
+    chapter_summary_count: summaryChapterIds.size,
+    missing_chapter_summaries: missingSummary
+  };
+}
+
 function createValidation(outputs) {
   const storyCount = outputs.stories.story_options.length;
   const missing = outputs.evidence.missing_evidence.length;
@@ -470,6 +704,15 @@ function createFinalReport(input, outputs) {
     .join("\n\n");
   const slides = outputs.deck.deck_outline
     .map((slide) => `| ${slide.slide_no} | ${slide.slide_title} | ${slide.main_message} |`)
+    .join("\n");
+  const chapterRows = outputs.chapters.chapters
+    .map((chapter) => `| ${chapter.chapter_id} | ${chapter.chapter_title} | ${chapter.chapter_message} | ${chapter.level2_arguments.join("、")} |`)
+    .join("\n");
+  const argumentRows = outputs.argumentTree.argument_tree
+    .flatMap((chapter) => chapter.arguments.map((argument) => `| ${chapter.chapter_title} | ${argument.level2} | ${argument.level3.map((item) => item.message).join(" / ")} |`))
+    .join("\n");
+  const slideRows = outputs.slideJson.slides
+    .map((slide) => `| ${slide.slide_no} | ${slide.slide_title} | ${slide.layout_type} | ${slide.main_message} |`)
     .join("\n");
 
   return `# 企画書ストーリー設計レポート
@@ -531,11 +774,33 @@ ${evalRows}
 |---:|---|---|
 ${slides}
 
-## 10. 検証結果
+## 10. 章構造
+
+| 章ID | 章 | 章メッセージ | 第二階層 |
+|---|---|---|---|
+${chapterRows}
+
+## 11. 論点構造
+
+| 章 | 第二階層 | 第三階層 |
+|---|---|---|
+${argumentRows}
+
+## 12. スライド構造
+
+| No | スライド | レイアウト | メインメッセージ |
+|---:|---|---|---|
+${slideRows}
+
+## 13. 検証結果
 
 ${markdownList(outputs.validation.validation_results.map((item) => `${item.item}: ${item.status} - ${item.comment}`))}
 
-## 11. 不足情報・追加調査事項
+スライド検証:
+
+${markdownList(outputs.slideValidation.validation_results.map((item) => `${item.item}: ${item.status} - ${item.comment}`))}
+
+## 14. 不足情報・追加調査事項
 
 ${markdownList(outputs.evidence.missing_evidence.map((item) => `${item.item}: ${item.reason}。影響: ${item.impact_on_evaluation}`))}
 `;
@@ -624,6 +889,34 @@ function createWorkbookRows(input, outputs) {
     {
       name: "11_承認確認",
       rows: [["確認項目", "回答"], ["このストーリーで企画書化するか", ""], ["別案を採用するか", ""], ["複数案を統合するか", ""], ["追加調査を行うか", ""]]
+    },
+    {
+      name: "12_章構造",
+      rows: [["章ID", "章", "章メッセージ", "第二階層", "必要根拠"], ...outputs.chapters.chapters.map((c) => [c.chapter_id, c.chapter_title, c.chapter_message, c.level2_arguments.join(" / "), c.required_evidence.join(" / ")])]
+    },
+    {
+      name: "13_章サマリー",
+      rows: [["章ID", "スライドタイトル", "メッセージ", "全体像ポイント"], ...outputs.chapterSummaries.chapter_summaries.map((c) => [c.chapter_id, c.summary_slide_title, c.one_slide_message, c.overview_points.join(" / ")])]
+    },
+    {
+      name: "14_論点構造",
+      rows: [["章ID", "章", "第二階層ID", "第二階層", "第三階層"], ...outputs.argumentTree.argument_tree.flatMap((c) => c.arguments.map((a) => [c.chapter_id, c.chapter_title, a.level2_id, a.level2, a.level3.map((l3) => `${l3.message}(${l3.evidence_type})`).join(" / ")]))]
+    },
+    {
+      name: "15_根拠マッピング",
+      rows: [["章ID", "第二階層ID", "第二階層", "必要根拠", "候補URL", "状態"], ...outputs.evidenceMapping.evidence_mappings.map((m) => [m.chapter_id, m.level2_id, m.level2, m.required_evidence.join(" / "), m.source_candidates.join(" / "), m.evidence_status])]
+    },
+    {
+      name: "16_スライドメッセージ",
+      rows: [["種別", "章ID", "タイトル", "メインメッセージ", "補足"], ...outputs.slideMessages.slide_messages.map((s) => [s.slide_kind, s.chapter_id, s.slide_title, s.main_message, s.support_points.join(" / ")])]
+    },
+    {
+      name: "17_スライドJSON",
+      rows: [["No", "タイトル", "役割", "メッセージ", "レイアウト", "根拠"], ...outputs.slideJson.slides.map((s) => [s.slide_no, s.slide_title, s.slide_role, s.main_message, s.layout_type, s.evidence.join(" / ")])]
+    },
+    {
+      name: "18_スライド検証",
+      rows: [["項目", "状態", "コメント"], ...outputs.slideValidation.validation_results.map((v) => [v.item, v.status, v.comment])]
     }
   ];
 }
@@ -796,8 +1089,36 @@ function run() {
   const evaluation = createEvaluation(stories, criteria);
   const recommendation = createRecommendation(evaluation, stories, solutions);
   const deck = createDeckOutline(input, recommendation);
-  const validation = createValidation({ stories, solutions, evidence, evaluation, recommendation, deck });
-  const outputs = { orchestrator, theme, environment, issue, stories, solutions, evidence, evaluation, recommendation, deck, validation };
+  const chapters = createChapterDesigner(input, issue, recommendation);
+  const chapterSummaries = createChapterSummary(chapters);
+  const argumentTree = createArgumentBuilder(chapters);
+  const evidenceMapping = createEvidenceMapping(argumentTree, evidence, input);
+  const slideMessages = createSlideMessageBuilder(chapterSummaries, argumentTree);
+  const slideLayouts = createSlideLayoutSelector(slideMessages);
+  const slideJson = createSlideJsonBuilder(slideLayouts, evidenceMapping);
+  const slideValidation = createSlideValidation(slideJson, chapterSummaries);
+  const validation = createValidation({ stories, solutions, evidence, evaluation, recommendation, deck, chapters, slideJson, slideValidation });
+  const outputs = {
+    orchestrator,
+    theme,
+    environment,
+    issue,
+    stories,
+    solutions,
+    evidence,
+    evaluation,
+    recommendation,
+    deck,
+    validation,
+    chapters,
+    chapterSummaries,
+    argumentTree,
+    evidenceMapping,
+    slideMessages,
+    slideLayouts,
+    slideJson,
+    slideValidation
+  };
 
   if (checkOnly) {
     console.log("OK: configuration and input files are readable.");
@@ -824,6 +1145,14 @@ function run() {
       "08_recommendation.json",
       "09_deck_outline.json",
       "10_validation.json",
+      "11_chapter_designer.json",
+      "12_chapter_summary.json",
+      "13_argument_builder.json",
+      "14_evidence_mapping.json",
+      "15_slide_message_builder.json",
+      "16_slide_layout_selector.json",
+      "17_slide_json_builder.json",
+      "18_slide_validation.json",
       "final_report.md",
       "proposal_story_analysis.xlsx",
       "selected_story_review.md"
@@ -842,6 +1171,14 @@ function run() {
   writeJson(runDir, "08_recommendation.json", recommendation);
   writeJson(runDir, "09_deck_outline.json", deck);
   writeJson(runDir, "10_validation.json", validation);
+  writeJson(runDir, "11_chapter_designer.json", chapters);
+  writeJson(runDir, "12_chapter_summary.json", chapterSummaries);
+  writeJson(runDir, "13_argument_builder.json", argumentTree);
+  writeJson(runDir, "14_evidence_mapping.json", evidenceMapping);
+  writeJson(runDir, "15_slide_message_builder.json", slideMessages);
+  writeJson(runDir, "16_slide_layout_selector.json", slideLayouts);
+  writeJson(runDir, "17_slide_json_builder.json", slideJson);
+  writeJson(runDir, "18_slide_validation.json", slideValidation);
 
   writeText(path.join(runDir, "final_report.md"), createFinalReport(input, outputs));
   writeText(path.join(runDir, "selected_story_review.md"), createApprovalReview(outputs));

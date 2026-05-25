@@ -10,6 +10,14 @@
     "07_evaluation",
     "08_recommendation",
     "09_deck_outline",
-    "10_validation"
+    "10_validation",
+    "11_chapter_designer",
+    "12_chapter_summary",
+    "13_argument_builder",
+    "14_evidence_mapping",
+    "15_slide_message_builder",
+    "16_slide_layout_selector",
+    "17_slide_json_builder",
+    "18_slide_validation"
   ]
 }
