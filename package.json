@@ -1,11 +1,13 @@
 {
-  "name": "proposal-story-agent",
+  "name": "codex-eastboard-templates",
   "version": "1.0.0",
-  "description": "Codex-ready multi-agent workflow for proposal story design.",
+  "description": "Codex-ready multi-agent workflow templates.",
   "type": "module",
   "scripts": {
     "start": "node src/run-proposal-story.js",
     "run": "node src/run-proposal-story.js",
+    "template": "node src/run-template.js",
+    "run:proposal-story": "node src/run-proposal-story.js",
     "check": "node src/run-proposal-story.js --check"
   },
   "engines": {

@@ -3,11 +3,13 @@ import path from "node:path";
 import { Buffer } from "node:buffer";
 
 const root = process.cwd();
-const outputBaseDir = path.join(root, "outputs");
+const templateId = "proposal-story";
+const templateRoot = path.join(root, "templates", templateId);
+const outputBaseDir = path.join(root, "outputs", templateId);
 const checkOnly = process.argv.includes("--check");
 
-function readJson(relativePath) {
-  return JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
+function readJson(baseDir, relativePath) {
+  return JSON.parse(fs.readFileSync(path.join(baseDir, relativePath), "utf8"));
 }
 
 function ensureDirs() {
@@ -90,9 +92,9 @@ function createOrchestrator(input, order) {
     agent_order: order.order,
     required_outputs: [
       "agent json files",
-      "outputs/YYYYMMDD_HHMMSS/final_report.md",
-      "outputs/YYYYMMDD_HHMMSS/proposal_story_analysis.xlsx",
-      "outputs/YYYYMMDD_HHMMSS/selected_story_review.md"
+      `outputs/${templateId}/YYYYMMDD_HHMMSS/final_report.md`,
+      `outputs/${templateId}/YYYYMMDD_HHMMSS/proposal_story_analysis.xlsx`,
+      `outputs/${templateId}/YYYYMMDD_HHMMSS/selected_story_review.md`
     ],
     quality_checks: [
       "最低3つのストーリー案がある",
@@ -358,7 +360,7 @@ function createEvaluation(stories, criteria) {
       story_title: story.story_title,
       scores,
       total_score: total,
-      evidence_based_reason: "初期評価。outputs/06_evidence_research.json の検索URLで根拠確認後に更新する。",
+      evidence_based_reason: `初期評価。outputs/${templateId}/YYYYMMDD_HHMMSS/06_evidence_research.json の検索URLで根拠確認後に更新する。`,
       main_risks: [story.weakness, "根拠が未確認の評価軸は追加調査が必要"],
       evaluation_comment: `${story.story_type}は、${story.strength}一方で、${story.weakness}。`
     };
@@ -779,10 +781,10 @@ function createXlsx(sheets, filePath) {
 
 function run() {
   ensureDirs();
-  const input = normalizeInput(readJson("inputs/user-theme.json"));
-  const order = readJson("config/agent-order.json");
-  const storyTypes = readJson("config/story-types.json");
-  const criteria = readJson("config/evaluation-criteria.json");
+  const input = normalizeInput(readJson(templateRoot, "inputs/user-theme.json"));
+  const order = readJson(templateRoot, "config/agent-order.json");
+  const storyTypes = readJson(templateRoot, "config/story-types.json");
+  const criteria = readJson(templateRoot, "config/evaluation-criteria.json");
 
   const orchestrator = createOrchestrator(input, order);
   const theme = createThemeInterpreter(input);
@@ -807,6 +809,7 @@ function run() {
   const { runId, runDir } = createRunDir();
   const manifest = {
     run_id: runId,
+    template_id: templateId,
     created_at: new Date().toISOString(),
     input_theme: input.theme,
     files: [

@@ -18,5 +18,5 @@ npm run start
 10. 推奨案を選ぶ
 11. 企画書構成へ変換する
 12. 検証結果を作る
-13. `outputs/YYYYMMDD_HHMMSS/` フォルダを作成する
+13. `outputs/proposal-story/YYYYMMDD_HHMMSS/` フォルダを作成する
 14. Markdown、Excel、承認用ファイルを同じ出力フォルダへ保存する

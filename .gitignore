@@ -1,8 +1,7 @@
 node_modules/
 outputs/*
 !outputs/.gitkeep
-PendingApproval/*.md
-!PendingApproval/.gitkeep
+PendingApproval/
 .env
 .DS_Store
 Thumbs.db
