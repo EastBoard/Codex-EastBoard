@@ -1,0 +1,15 @@
+{
+  "order": [
+    "00_orchestrator",
+    "01_theme_interpreter",
+    "02_environment_research",
+    "03_issue_objective",
+    "04_story_generator",
+    "05_solution_generator",
+    "06_evidence_research",
+    "07_evaluation",
+    "08_recommendation",
+    "09_deck_outline",
+    "10_validation"
+  ]
+}

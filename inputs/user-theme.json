@@ -1,0 +1,13 @@
+{
+  "theme": "AIを活用したBtoB営業支援",
+  "target_reader": "経営者・決裁者・事業責任者",
+  "proposal_goal": "企画書で意思決定を得る",
+  "industry": "",
+  "company_context": "",
+  "constraints": {
+    "region": "日本",
+    "language": "ja",
+    "must_use_web_evidence": true,
+    "minimum_story_options": 3
+  }
+}

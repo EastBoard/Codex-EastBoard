@@ -1,0 +1,14 @@
+{
+  "name": "proposal-story-agent",
+  "version": "1.0.0",
+  "description": "Codex-ready multi-agent workflow for proposal story design.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/run-proposal-story.js",
+    "run": "node src/run-proposal-story.js",
+    "check": "node src/run-proposal-story.js --check"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

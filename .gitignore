@@ -1,0 +1,10 @@
+node_modules/
+outputs/*.json
+outputs/*.md
+outputs/*.xlsx
+!outputs/.gitkeep
+PendingApproval/*.md
+!PendingApproval/.gitkeep
+.env
+.DS_Store
+Thumbs.db

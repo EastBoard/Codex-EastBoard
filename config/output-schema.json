@@ -1,0 +1,21 @@
+{
+  "json_outputs": [
+    "01_theme_interpreter.json",
+    "02_environment_research.json",
+    "03_issue_objective.json",
+    "04_story_generator.json",
+    "05_solution_generator.json",
+    "06_evidence_research.json",
+    "07_evaluation.json",
+    "08_recommendation.json",
+    "09_deck_outline.json",
+    "10_validation.json"
+  ],
+  "report_outputs": [
+    "final_report.md",
+    "proposal_story_analysis.xlsx"
+  ],
+  "approval_outputs": [
+    "PendingApproval/selected_story_review.md"
+  ]
+}

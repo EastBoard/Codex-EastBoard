@@ -1,0 +1,29 @@
+{
+  "story_types": [
+    {
+      "id": "market_opportunity",
+      "name": "市場機会拡大型",
+      "purpose": "市場成長や環境変化を根拠に、新しい取り組みの必要性を伝える"
+    },
+    {
+      "id": "issue_solution",
+      "name": "課題解決型",
+      "purpose": "現状課題を明確化し、解決策の必要性を伝える"
+    },
+    {
+      "id": "competitive_advantage",
+      "name": "競合対抗型",
+      "purpose": "競合との差分を明確にし、勝ち筋を伝える"
+    },
+    {
+      "id": "profit_improvement",
+      "name": "収益改善型",
+      "purpose": "売上、利益率、LTV、コスト改善を軸に投資判断を促す"
+    },
+    {
+      "id": "customer_experience",
+      "name": "顧客体験改善型",
+      "purpose": "顧客体験、継続率、満足度の改善を軸に提案する"
+    }
+  ]
+}
