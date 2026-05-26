@@ -1,0 +1,176 @@
+{
+  "pipeline_id": "proposal-story-agent-pipeline",
+  "description": "proposal-story template prompt chain contract. The current local runner generates deterministic artifacts that correspond to these agents; future LLM orchestration should execute prompts in this order and persist each declared output.",
+  "review_gate": {
+    "after_agent": "21_excel_exporter",
+    "required_outputs": [
+      "proposal_story_analysis.xlsx",
+      "selected_story_review.md",
+      "approval_request.json"
+    ],
+    "rule": "Stop after Excel output. Do not generate PowerPoint until the user reviews the workbook and an approval_decision.json is recorded."
+  },
+  "agents": [
+    {
+      "id": "00_orchestrator",
+      "prompt": "agents/00_orchestrator/prompt.md",
+      "phase": "analysis",
+      "inputs": ["inputs/user-theme.json", "config/agent-order.json"],
+      "outputs": ["00_orchestrator.json"]
+    },
+    {
+      "id": "01_theme_interpreter",
+      "prompt": "agents/01_theme_interpreter/prompt.md",
+      "phase": "analysis",
+      "inputs": ["inputs/user-theme.json"],
+      "outputs": ["01_theme_interpreter.json"]
+    },
+    {
+      "id": "02_environment_research",
+      "prompt": "agents/02_environment_research/prompt.md",
+      "phase": "analysis",
+      "inputs": ["01_theme_interpreter.json"],
+      "outputs": ["02_environment_research.json"]
+    },
+    {
+      "id": "03_issue_objective",
+      "prompt": "agents/03_issue_objective/prompt.md",
+      "phase": "analysis",
+      "inputs": ["01_theme_interpreter.json", "02_environment_research.json"],
+      "outputs": ["03_issue_objective.json"]
+    },
+    {
+      "id": "04_story_generator",
+      "prompt": "agents/04_story_generator/prompt.md",
+      "phase": "analysis",
+      "inputs": ["02_environment_research.json", "03_issue_objective.json", "config/story-types.json"],
+      "outputs": ["04_story_generator.json"]
+    },
+    {
+      "id": "05_solution_generator",
+      "prompt": "agents/05_solution_generator/prompt.md",
+      "phase": "analysis",
+      "inputs": ["04_story_generator.json"],
+      "outputs": ["05_solution_generator.json"]
+    },
+    {
+      "id": "06_evidence_research",
+      "prompt": "agents/06_evidence_research/prompt.md",
+      "phase": "analysis",
+      "inputs": ["04_story_generator.json", "05_solution_generator.json", "config/evaluation-criteria.json", "config/web-research.json"],
+      "outputs": ["06_evidence_research.json", "web_research_plan.json", "web_research_results.json"]
+    },
+    {
+      "id": "07_evaluation",
+      "prompt": "agents/07_evaluation/prompt.md",
+      "phase": "analysis",
+      "inputs": ["04_story_generator.json", "06_evidence_research.json", "config/evaluation-criteria.json"],
+      "outputs": ["07_evaluation.json"]
+    },
+    {
+      "id": "08_recommendation",
+      "prompt": "agents/08_recommendation/prompt.md",
+      "phase": "analysis",
+      "inputs": ["04_story_generator.json", "05_solution_generator.json", "07_evaluation.json"],
+      "outputs": ["08_recommendation.json"]
+    },
+    {
+      "id": "09_deck_outline",
+      "prompt": "agents/09_deck_outline/prompt.md",
+      "phase": "analysis",
+      "inputs": ["08_recommendation.json"],
+      "outputs": ["09_deck_outline.json"]
+    },
+    {
+      "id": "10_validation",
+      "prompt": "agents/10_validation/prompt.md",
+      "phase": "analysis",
+      "inputs": ["01_theme_interpreter.json", "02_environment_research.json", "03_issue_objective.json", "04_story_generator.json", "05_solution_generator.json", "06_evidence_research.json", "07_evaluation.json", "08_recommendation.json", "09_deck_outline.json"],
+      "outputs": ["10_validation.json"]
+    },
+    {
+      "id": "11_chapter_designer",
+      "prompt": "agents/11_chapter_designer/prompt.md",
+      "phase": "analysis",
+      "inputs": ["03_issue_objective.json", "08_recommendation.json"],
+      "outputs": ["11_chapter_designer.json"]
+    },
+    {
+      "id": "12_chapter_summary",
+      "prompt": "agents/12_chapter_summary/prompt.md",
+      "phase": "analysis",
+      "inputs": ["11_chapter_designer.json"],
+      "outputs": ["12_chapter_summary.json"]
+    },
+    {
+      "id": "13_argument_builder",
+      "prompt": "agents/13_argument_builder/prompt.md",
+      "phase": "analysis",
+      "inputs": ["11_chapter_designer.json"],
+      "outputs": ["13_argument_builder.json"]
+    },
+    {
+      "id": "14_evidence_mapping",
+      "prompt": "agents/14_evidence_mapping/prompt.md",
+      "phase": "analysis",
+      "inputs": ["13_argument_builder.json", "06_evidence_research.json"],
+      "outputs": ["14_evidence_mapping.json"]
+    },
+    {
+      "id": "15_slide_message_builder",
+      "prompt": "agents/15_slide_message_builder/prompt.md",
+      "phase": "analysis",
+      "inputs": ["12_chapter_summary.json", "13_argument_builder.json"],
+      "outputs": ["15_slide_message_builder.json"]
+    },
+    {
+      "id": "16_slide_layout_selector",
+      "prompt": "agents/16_slide_layout_selector/prompt.md",
+      "phase": "analysis",
+      "inputs": ["15_slide_message_builder.json", "config/layout-registry.json", "config/layout-selection-rules.json", "config/chapter-layout-map.json"],
+      "outputs": ["16_slide_layout_selector.json"]
+    },
+    {
+      "id": "17_slide_json_builder",
+      "prompt": "agents/17_slide_json_builder/prompt.md",
+      "phase": "analysis",
+      "inputs": ["15_slide_message_builder.json", "16_slide_layout_selector.json", "14_evidence_mapping.json", "schemas/slide-schema.json"],
+      "outputs": ["17_slide_json_builder.json"]
+    },
+    {
+      "id": "18_slide_validation",
+      "prompt": "agents/18_slide_validation/prompt.md",
+      "phase": "analysis",
+      "inputs": ["17_slide_json_builder.json", "12_chapter_summary.json", "config/layout-registry.json"],
+      "outputs": ["18_slide_validation.json"]
+    },
+    {
+      "id": "19_layout_registry_manager",
+      "prompt": "agents/19_layout_registry_manager/prompt.md",
+      "phase": "analysis",
+      "inputs": ["config/layout-registry.json"],
+      "outputs": ["19_layout_registry_manager.json", "layout_registry.csv"]
+    },
+    {
+      "id": "20_content_fit_validator",
+      "prompt": "agents/20_content_fit_validator/prompt.md",
+      "phase": "analysis",
+      "inputs": ["17_slide_json_builder.json", "config/layout-registry.json", "config/layout-content-rules.json"],
+      "outputs": ["20_content_fit_validator.json"]
+    },
+    {
+      "id": "21_excel_exporter",
+      "prompt": "agents/21_excel_exporter/prompt.md",
+      "phase": "analysis",
+      "inputs": ["all analysis json outputs", "selected_story_review.md"],
+      "outputs": ["21_excel_exporter.json", "proposal_story_analysis.xlsx", "approval_request.json"]
+    },
+    {
+      "id": "22_powerpoint_exporter",
+      "prompt": "commands/run-proposal-story.md",
+      "phase": "slides",
+      "inputs": ["approval_decision.json", "17_slide_json_builder.json", "assets/design/slide_layout_collection_native.pptx"],
+      "outputs": ["22_powerpoint_exporter.json", "proposal_story_slides.pptx"]
+    }
+  ]
+}

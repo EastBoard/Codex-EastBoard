@@ -1,0 +1,26 @@
+{
+  "enabled_by_default": true,
+  "search_provider": "duckduckgo_html",
+  "max_queries": 6,
+  "max_sources_per_query": 2,
+  "request_timeout_ms": 8000,
+  "preferred_source_domains": [
+    "go.jp",
+    "meti.go.jp",
+    "soumu.go.jp",
+    "mhlw.go.jp",
+    "stat.go.jp",
+    "ipa.go.jp",
+    "jst.go.jp",
+    "jetro.go.jp"
+  ],
+  "source_quality_rules": [
+    "一次情報、公的統計、企業公式、業界団体、信頼できる調査会社を優先する",
+    "出典URL、出典名、確認日、調査クエリ、企画書への示唆を必ず残す",
+    "取得できなかった項目は未調査ではなく、取得失敗または追加調査が必要として記録する"
+  ],
+  "approval_gate": {
+    "block_slides_when_required_web_evidence_missing": true,
+    "minimum_confirmed_sources": 3
+  }
+}

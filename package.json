@@ -4,11 +4,14 @@
   "description": "Codex-ready multi-agent workflow templates.",
   "type": "module",
   "scripts": {
-    "start": "node src/run-proposal-story.js",
-    "run": "node src/run-proposal-story.js",
-    "template": "node src/run-template.js",
+    "start": "node src/template-cli.js",
+    "run": "node src/template-cli.js",
+    "template": "node src/template-cli.js",
+    "continue": "node src/template-cli.js --continue",
+    "continue:yes": "node src/template-cli.js --continue --yes",
     "templates": "node src/list-templates.js",
     "run:proposal-story": "node src/run-proposal-story.js",
+    "generate:proposal-story": "node src/run-proposal-story.js",
     "analysis:proposal-story": "node src/run-proposal-story.js --phase analysis",
     "slides:proposal-story": "node src/run-proposal-story.js --phase slides",
     "check": "node src/run-proposal-story.js --check"

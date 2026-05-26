@@ -1,13 +1,27 @@
 {
-  "theme": "AIを活用したBtoB営業支援",
-  "target_reader": "経営者・決裁者・事業責任者",
-  "proposal_goal": "企画書で意思決定を得る",
-  "industry": "",
-  "company_context": "",
+  "theme": "AIコンサル会社の新規サービスについて",
+  "target_reader": "社内　役員層",
+  "proposal_goal": "特定の新さーびすの承認",
+  "industry": "すべて",
+  "company_context": "ない",
+  "brief": {
+    "document_type": "新規サービス承認資料",
+    "current_stage": "未定",
+    "service_hypothesis": "未定",
+    "target_customer": "未定",
+    "customer_pain": "未定",
+    "differentiation": "未定",
+    "business_model": "未定",
+    "success_metrics": "未定",
+    "constraints": "未定",
+    "must_answer": "未定"
+  },
   "constraints": {
     "region": "日本",
     "language": "ja",
     "must_use_web_evidence": true,
-    "minimum_story_options": 3
+    "minimum_story_options": 3,
+    "research_focus": "市場規模、競合、導入事例、投資対効果",
+    "research_depth": "standard"
   }
 }

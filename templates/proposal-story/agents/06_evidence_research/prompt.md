@@ -11,5 +11,14 @@
 - 根拠と示唆を分ける
 - URLを付ける
 - 出典名を書く
+- 確認日を書く
+- Web取得に成功した根拠と、検索候補だけの根拠を区別する
 - 不足情報は不足情報として明記する
 - 評価軸ごとに使える根拠を整理する
+- `config/web-research.json` の件数、優先ドメイン、承認ゲートを守る
+
+## 出力
+
+- `web_research_plan.json`: 検索クエリ、評価軸、狙う根拠、優先度
+- `web_research_results.json`: 取得URL、出典名、確認日、抽出要約、信頼度、取得状態
+- `06_evidence_research.json`: ストーリー評価に使う根拠。Web取得済み項目は `reliability: confirmed_web` にする

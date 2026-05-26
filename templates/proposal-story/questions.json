@@ -1,42 +1,222 @@
 {
   "template_id": "proposal-story",
+  "question_policy": {
+    "principle": "資料の意思決定ゴールから逆算して質問する。未定の回答を許容し、Codexが仮説・調査観点・確認事項へ変換する。",
+    "unknown_answer": "未定",
+    "instruction_to_user": "わからない項目は「未定」で構いません。Codexが仮説を置き、Excelに確認ポイントとして残します。"
+  },
   "questions": [
+    {
+      "id": "document_type",
+      "label": "資料タイプ",
+      "question": "今回作りたい資料は何に一番近いですか？",
+      "required": true,
+      "target_path": "brief.document_type",
+      "default": "新規サービス承認資料",
+      "examples": [
+        "新規サービス承認資料",
+        "役員会向け投資判断資料",
+        "事業計画ドラフト",
+        "営業提案書",
+        "市場参入判断資料"
+      ],
+      "why": "資料タイプにより、必要な章立て・調査・評価軸が変わるため"
+    },
+    {
+      "id": "decision_to_win",
+      "label": "獲得したい判断",
+      "question": "この資料で最終的に誰から、どんな判断を取りたいですか？",
+      "required": true,
+      "target_path": "proposal_goal",
+      "default": "役員層から新規サービスの検討継続・詳細設計の承認を得る",
+      "examples": [
+        "役員層から新規サービスのGo承認を得る",
+        "PoC予算の承認を得る",
+        "市場調査の継続判断を得る",
+        "営業開始の承認を得る"
+      ],
+      "why": "承認条件から、必要な根拠とスライド構成を逆算するため"
+    },
     {
       "id": "theme",
       "label": "テーマ",
-      "question": "企画書で扱いたいテーマは何ですか？",
+      "question": "資料の主題を一言でいうと何ですか？",
       "required": true,
-      "target_path": "theme"
+      "target_path": "theme",
+      "default": "AIコンサル会社の新規サービス",
+      "examples": [
+        "AIコンサル会社の新規サービス",
+        "生成AI活用支援サービス",
+        "中堅企業向けAI導入パッケージ"
+      ],
+      "why": "検索クエリ、章タイトル、企画書タイトルの起点にするため"
     },
     {
       "id": "target_reader",
-      "label": "想定読者",
-      "question": "誰に意思決定してもらう企画書ですか？",
+      "label": "意思決定者",
+      "question": "主な読み手・意思決定者は誰ですか？",
       "required": true,
       "target_path": "target_reader",
-      "default": "経営者・決裁者・事業責任者"
+      "default": "社内の役員層",
+      "examples": [
+        "社内の役員層",
+        "代表・取締役会",
+        "事業責任者",
+        "顧客企業の決裁者"
+      ],
+      "why": "読み手が重視する論点、粒度、言葉遣いを合わせるため"
     },
     {
-      "id": "proposal_goal",
-      "label": "目的",
-      "question": "この企画書で得たい判断・承認は何ですか？",
-      "required": true,
-      "target_path": "proposal_goal",
-      "default": "企画書で意思決定を得る"
-    },
-    {
-      "id": "industry",
-      "label": "業界",
-      "question": "対象業界があれば教えてください。",
+      "id": "current_stage",
+      "label": "検討段階",
+      "question": "このテーマは今どの段階ですか？",
       "required": false,
-      "target_path": "industry"
+      "target_path": "brief.current_stage",
+      "default": "未定",
+      "examples": [
+        "アイデア段階",
+        "仮説あり・未検証",
+        "顧客ヒアリング済み",
+        "PoC準備中",
+        "未定"
+      ],
+      "why": "資料で求める精度と、調査で補うべき不足を判断するため"
     },
     {
-      "id": "company_context",
-      "label": "自社状況",
-      "question": "自社の前提、強み、制約があれば教えてください。",
+      "id": "service_hypothesis",
+      "label": "サービス仮説",
+      "question": "想定しているサービス内容があれば教えてください。未定なら未定で構いません。",
       "required": false,
-      "target_path": "company_context"
+      "target_path": "brief.service_hypothesis",
+      "default": "未定",
+      "examples": [
+        "AI導入診断からPoC、定着支援までを一気通貫で提供",
+        "業務別の生成AI活用テンプレートと伴走コンサル",
+        "未定"
+      ],
+      "why": "サービス案、差別化、価格、実行計画の仮説を作るため"
+    },
+    {
+      "id": "target_customer",
+      "label": "対象顧客",
+      "question": "想定顧客・業界・企業規模はありますか？",
+      "required": false,
+      "target_path": "brief.target_customer",
+      "default": "未定",
+      "examples": [
+        "中堅BtoB企業",
+        "製造業のDX部門",
+        "営業・カスタマーサクセス部門",
+        "全業界",
+        "未定"
+      ],
+      "why": "市場調査、顧客課題、競合比較の対象を絞るため"
+    },
+    {
+      "id": "customer_pain",
+      "label": "顧客課題",
+      "question": "顧客が困っていそうな課題は何ですか？確証がなければ仮説で構いません。",
+      "required": false,
+      "target_path": "brief.customer_pain",
+      "default": "未定",
+      "examples": [
+        "生成AIを導入したいが、業務適用と効果測定ができない",
+        "PoC止まりで現場定着しない",
+        "AI人材が不足している",
+        "未定"
+      ],
+      "why": "課題解決型ストーリーと調査クエリの中心にするため"
+    },
+    {
+      "id": "differentiation",
+      "label": "勝ち筋仮説",
+      "question": "競合に対する勝ち筋・差別化になりそうな点はありますか？",
+      "required": false,
+      "target_path": "brief.differentiation",
+      "default": "未定",
+      "examples": [
+        "業務実装まで伴走できる",
+        "特定業界の知見がある",
+        "低価格・短期間で始められる",
+        "未定"
+      ],
+      "why": "競合対抗型ストーリーと比較評価の軸にするため"
+    },
+    {
+      "id": "business_model",
+      "label": "収益モデル",
+      "question": "価格・課金・提供形態の想定はありますか？",
+      "required": false,
+      "target_path": "brief.business_model",
+      "default": "未定",
+      "examples": [
+        "診断30万円、PoC300万円、月額伴走50万円",
+        "初期導入費＋月額",
+        "成果報酬",
+        "未定"
+      ],
+      "why": "投資対効果、売上見込み、承認判断の材料にするため"
+    },
+    {
+      "id": "success_metrics",
+      "label": "成功指標",
+      "question": "承認後に何が達成できれば成功といえますか？",
+      "required": false,
+      "target_path": "brief.success_metrics",
+      "default": "未定",
+      "examples": [
+        "半年でPoC 3件、売上1000万円",
+        "初年度売上5000万円",
+        "既存顧客10社へ提案",
+        "未定"
+      ],
+      "why": "KPI、実行計画、投資対効果のスライドを作るため"
+    },
+    {
+      "id": "constraints",
+      "label": "制約条件",
+      "question": "予算・人員・期限・守るべき条件はありますか？",
+      "required": false,
+      "target_path": "brief.constraints",
+      "default": "未定",
+      "examples": [
+        "3か月で初期案が必要",
+        "既存メンバーだけで開始したい",
+        "大きな開発投資は避けたい",
+        "未定"
+      ],
+      "why": "実行可能性とリスクの評価に使うため"
+    },
+    {
+      "id": "must_answer",
+      "label": "必ず答える論点",
+      "question": "役員・読み手から必ず聞かれそうな問いは何ですか？",
+      "required": false,
+      "target_path": "brief.must_answer",
+      "default": "未定",
+      "examples": [
+        "市場は本当に伸びるのか",
+        "なぜ自社が勝てるのか",
+        "いくら儲かるのか",
+        "失敗時の損失は何か",
+        "未定"
+      ],
+      "why": "資料の章立てとWeb調査の優先順位を決めるため"
+    },
+    {
+      "id": "research_focus",
+      "label": "調査重点",
+      "question": "Web調査で特に重視したい観点はありますか？",
+      "required": false,
+      "target_path": "constraints.research_focus",
+      "default": "市場規模、競合、導入事例、投資対効果",
+      "examples": [
+        "市場規模、競合、導入事例、投資対効果",
+        "国内事例と競合サービス",
+        "価格相場と収益性",
+        "未定"
+      ],
+      "why": "Web調査クエリと根拠シートの重点を決めるため"
     },
     {
       "id": "region",
@@ -44,7 +224,9 @@
       "question": "対象地域はどこですか？",
       "required": false,
       "target_path": "constraints.region",
-      "default": "日本"
+      "default": "日本",
+      "examples": ["日本", "グローバル", "未定"],
+      "why": "市場・競合・事例の検索対象を決めるため"
     }
   ]
 }

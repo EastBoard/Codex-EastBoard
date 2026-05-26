@@ -8,7 +8,9 @@ const templateId = "proposal-story";
 const templateRoot = path.join(root, "templates", templateId);
 const outputBaseDir = path.join(root, "outputs", templateId);
 const checkOnly = process.argv.includes("--check");
-const phaseArg = readArg("--phase", "all");
+const forceSlides = process.argv.includes("--force-slides");
+const skipWebResearch = process.argv.includes("--skip-web-research") || checkOnly || process.env.CODEX_EASTBOARD_SKIP_WEB === "1";
+const phaseArg = readArg("--phase", "analysis");
 const runDirArg = readArg("--run-dir", "") || readPositionalRunDir();
 
 function readArg(name, fallback = "") {
@@ -86,19 +88,170 @@ function buildSearchQuery(theme, keyword) {
   return `${theme} ${keyword} 日本`;
 }
 
+function todayIsoDate() {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: process.env.TZ || "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+}
+
+function stripHtml(value) {
+  return String(value || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function sourceNameFromUrl(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "Web source";
+  }
+}
+
+function withTimeout(ms) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+  return { signal: controller.signal, cancel: () => clearTimeout(timeout) };
+}
+
+async function fetchText(url, timeoutMs) {
+  const timeout = withTimeout(timeoutMs);
+  try {
+    const response = await fetch(url, {
+      signal: timeout.signal,
+      headers: {
+        "user-agent": "Codex-EastBoard/1.0 research runner"
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.text();
+  } finally {
+    timeout.cancel();
+  }
+}
+
+function decodeDuckDuckGoUrl(url) {
+  try {
+    const parsed = new URL(url, "https://duckduckgo.com");
+    const uddg = parsed.searchParams.get("uddg");
+    return uddg ? decodeURIComponent(uddg) : parsed.href;
+  } catch {
+    return url;
+  }
+}
+
+function parseSearchResults(html) {
+  const results = [];
+  const regex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  for (const match of html.matchAll(regex)) {
+    const url = decodeDuckDuckGoUrl(match[1]);
+    if (!url.startsWith("http")) continue;
+    results.push({
+      title: stripHtml(match[2]) || sourceNameFromUrl(url),
+      url
+    });
+  }
+  return results;
+}
+
+function extractPageSummary(htmlOrText, fallbackTitle = "") {
+  const titleMatch = String(htmlOrText).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const metaMatch = String(htmlOrText).match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+  const text = stripHtml(htmlOrText);
+  return {
+    title: stripHtml(titleMatch?.[1] || fallbackTitle),
+    summary: stripHtml(metaMatch?.[1] || text.slice(0, 450))
+  };
+}
+
 function normalizeInput(input) {
+  const brief = input.brief || {};
   return {
     theme: asText(input.theme, "未設定テーマ"),
     target_reader: asText(input.target_reader, "経営者・決裁者・事業責任者"),
     proposal_goal: asText(input.proposal_goal, "企画書で意思決定を得る"),
     industry: asText(input.industry, "未指定"),
     company_context: asText(input.company_context, "未指定"),
+    brief: {
+      document_type: asText(brief.document_type, "新規サービス承認資料"),
+      current_stage: asText(brief.current_stage, "未定"),
+      service_hypothesis: asText(brief.service_hypothesis, "未定"),
+      target_customer: asText(brief.target_customer, "未定"),
+      customer_pain: asText(brief.customer_pain, "未定"),
+      differentiation: asText(brief.differentiation, "未定"),
+      business_model: asText(brief.business_model, "未定"),
+      success_metrics: asText(brief.success_metrics, "未定"),
+      constraints: asText(brief.constraints, "未定"),
+      must_answer: asText(brief.must_answer, "未定")
+    },
     constraints: {
       region: asText(input.constraints?.region, "日本"),
       language: asText(input.constraints?.language, "ja"),
       must_use_web_evidence: input.constraints?.must_use_web_evidence !== false,
-      minimum_story_options: Number(input.constraints?.minimum_story_options || 3)
+      minimum_story_options: Number(input.constraints?.minimum_story_options || 3),
+      research_focus: asText(input.constraints?.research_focus, "市場規模、競合、導入事例、投資対効果"),
+      research_depth: asText(input.constraints?.research_depth, "standard")
     }
+  };
+}
+
+function isUnknown(value) {
+  const text = String(value || "").trim();
+  return text === "" || ["未定", "不明", "なし", "ない", "わからない", "分からない"].includes(text);
+}
+
+function inferBrief(input) {
+  const b = input.brief;
+  const assumptions = {
+    service_hypothesis: isUnknown(b.service_hypothesis)
+      ? `${input.theme}を、診断・PoC・実装定着支援まで段階提供するサービスとして仮置きする`
+      : b.service_hypothesis,
+    target_customer: isUnknown(b.target_customer)
+      ? input.industry && input.industry !== "未指定" && input.industry !== "すべて"
+        ? `${input.industry}の中堅から大手企業`
+        : "生成AI活用に関心はあるが、業務実装と効果測定に課題を持つ中堅から大手企業"
+      : b.target_customer,
+    customer_pain: isUnknown(b.customer_pain)
+      ? "生成AIを導入したいが、具体的な業務適用、効果測定、現場定着まで設計できない"
+      : b.customer_pain,
+    differentiation: isUnknown(b.differentiation)
+      ? "単発助言ではなく、業務診断、ユースケース設計、PoC、定着支援を一気通貫で提供できる点"
+      : b.differentiation,
+    business_model: isUnknown(b.business_model)
+      ? "初期診断、PoC、月額伴走を組み合わせた段階課金"
+      : b.business_model,
+    success_metrics: isUnknown(b.success_metrics)
+      ? "初年度のPoC件数、受注額、継続率、顧客業務KPI改善"
+      : b.success_metrics,
+    constraints: isUnknown(b.constraints)
+      ? "初期投資を抑え、既存人員で小さく検証できる計画を優先"
+      : b.constraints,
+    must_answer: isUnknown(b.must_answer)
+      ? "市場性、顧客課題、競合との差別化、収益性、実行リスク"
+      : b.must_answer
+  };
+
+  const unknowns = Object.entries(b)
+    .filter(([key, value]) => key !== "document_type" && isUnknown(value))
+    .map(([key]) => key);
+
+  return {
+    document_type: b.document_type,
+    current_stage: b.current_stage,
+    assumptions,
+    unknowns,
+    confirmation_points: unknowns.map((key) => `${key} は未定のため、仮説を置いてExcelで確認する`)
   };
 }
 
@@ -125,12 +278,20 @@ function createOrchestrator(input, order) {
 }
 
 function createThemeInterpreter(input) {
+  const inferred = inferBrief(input);
   return {
     input_theme: input.theme,
-    interpreted_theme: `${input.theme}を、${input.target_reader}が投資・実行判断できる企画書ストーリーに変換する`,
+    document_type: inferred.document_type,
+    interpreted_theme: `${input.theme}を、${input.target_reader}が「${input.proposal_goal}」を判断できる${inferred.document_type}に変換する`,
     proposal_purpose: input.proposal_goal,
     target_reader: input.target_reader,
+    briefing_assumptions: inferred.assumptions,
+    unknowns: inferred.unknowns,
+    confirmation_points: inferred.confirmation_points,
     decision_points: [
+      `この資料で求める判断は「${input.proposal_goal}」でよいか`,
+      `想定サービスは「${inferred.assumptions.service_hypothesis}」でよいか`,
+      `対象顧客は「${inferred.assumptions.target_customer}」でよいか`,
       "なぜ今取り組むべきか",
       "どの課題を解決するのか",
       "複数案のうち、どのストーリーが最も勝てるのか",
@@ -138,18 +299,18 @@ function createThemeInterpreter(input) {
       "期待成果と主要リスクは何か"
     ],
     key_questions: [
+      `${inferred.assumptions.target_customer}は${inferred.assumptions.customer_pain}をどの程度抱えているか`,
       `${input.theme}の市場・業界変化は何か`,
-      `顧客は${input.theme}にどのような課題や期待を持っているか`,
-      `競合や先行企業はどのような取り組みをしているか`,
-      `短期成果と中長期拡張性を両立できる施策は何か`,
-      `経営判断に必要な根拠は何か`
+      `${inferred.assumptions.differentiation}は競合に対して有効な差別化か`,
+      `${inferred.assumptions.business_model}は収益性・導入しやすさの両面で妥当か`,
+      `${input.target_reader}が判断するために不足している根拠は何か`
     ],
     research_needs: [
-      buildSearchQuery(input.theme, "市場規模 成長率"),
-      buildSearchQuery(input.theme, "顧客ニーズ 調査"),
-      buildSearchQuery(input.theme, "導入事例 成功事例"),
-      buildSearchQuery(input.theme, "競合 企業 事例"),
-      buildSearchQuery(input.theme, "ROI 効果 KPI")
+      buildSearchQuery(`${input.theme} ${inferred.assumptions.target_customer}`, "市場規模 成長率"),
+      buildSearchQuery(`${input.theme} ${inferred.assumptions.customer_pain}`, "顧客課題 調査"),
+      buildSearchQuery(`${input.theme} ${inferred.assumptions.differentiation}`, "競合 事例"),
+      buildSearchQuery(`${input.theme} ${inferred.assumptions.business_model}`, "価格 相場"),
+      buildSearchQuery(`${input.theme} ${inferred.assumptions.success_metrics}`, "ROI KPI")
     ],
     assumptions: [
       `対象地域は${input.constraints.region}`,
@@ -161,6 +322,7 @@ function createThemeInterpreter(input) {
 }
 
 function createEnvironmentResearch(input) {
+  const inferred = inferBrief(input);
   const categories = [
     ["market_trends", "市場環境", "市場規模、成長率、導入拡大の兆候を確認する"],
     ["customer_trends", "顧客ニーズ", "顧客の業務課題、購買行動、期待効果を確認する"],
@@ -169,7 +331,7 @@ function createEnvironmentResearch(input) {
     ["social_regulatory_trends", "社会・制度変化", "働き方、個人情報、AI利用ルール、業界規制を確認する"]
   ];
   const data = {
-    environment_summary: `${input.theme}は、顧客課題、技術進化、競争環境の変化を踏まえて、意思決定者に投資理由を示す必要がある。`,
+    environment_summary: `${input.theme}は、${inferred.assumptions.target_customer}の「${inferred.assumptions.customer_pain}」を解く新規サービスとして、市場性、競合差別化、収益性を検証する必要がある。`,
     key_implications: [
       "市場性だけでなく、自社が勝てる導入領域を絞る必要がある",
       "効果測定可能なKPIを先に設計する必要がある",
@@ -179,7 +341,7 @@ function createEnvironmentResearch(input) {
   };
 
   for (const [key, label, impact] of categories) {
-    const query = buildSearchQuery(input.theme, label);
+    const query = buildSearchQuery(`${input.theme} ${inferred.assumptions.target_customer} ${inferred.assumptions.customer_pain}`, label);
     data[key] = [
       {
         point: `${label}の変化を確認する`,
@@ -195,19 +357,20 @@ function createEnvironmentResearch(input) {
 }
 
 function createIssueObjective(input, env) {
+  const inferred = inferBrief(input);
   const issues = [
     {
       issue: "投資判断に必要な市場性と成果見込みが曖昧",
       background_link: env.market_trends[0].point,
       cause: "市場・顧客・競合情報が企画書上で分断されている",
-      symptom: "提案が魅力的でも、なぜ今やるべきかが弱く見える",
+      symptom: `${inferred.assumptions.target_customer}に本当に需要があるか説明しにくい`,
       business_impact: "承認遅延、優先度低下、予算化失敗につながる",
       priority: "high"
     },
     {
       issue: "顧客課題と施策の対応関係が見えにくい",
       background_link: env.customer_trends[0].point,
-      cause: "顧客ニーズを施策・KPIへ変換できていない",
+      cause: `顧客課題「${inferred.assumptions.customer_pain}」を施策・KPIへ変換できていない`,
       symptom: "機能説明中心になり、事業成果の説明が弱くなる",
       business_impact: "導入後の評価指標が曖昧になり、継続投資を得にくい",
       priority: "high"
@@ -223,7 +386,7 @@ function createIssueObjective(input, env) {
   ];
 
   return {
-    issue_summary: `${input.theme}の企画化では、環境変化を根拠に、顧客課題、勝ち筋、成果指標を一貫させることが重要である。`,
+    issue_summary: `${input.theme}の企画化では、対象顧客、顧客課題、勝ち筋、収益モデル、成功指標を一貫させることが重要である。`,
     issues,
     proposal_objectives: [
       {
@@ -239,7 +402,7 @@ function createIssueObjective(input, env) {
         related_issue: issues[1].issue
       }
     ],
-    core_message: `${input.theme}は、単なる施策紹介ではなく、根拠に基づく勝ち筋ストーリーとして設計すべきである。`,
+    core_message: `${input.theme}は、${inferred.assumptions.differentiation}を勝ち筋として、根拠に基づく${inferred.document_type}へ設計すべきである。`,
     must_address_points: [
       "市場・顧客・競合の根拠",
       "複数ストーリー案の比較",
@@ -250,6 +413,7 @@ function createIssueObjective(input, env) {
 }
 
 function createStoryGenerator(input, storyTypes) {
+  const inferred = inferBrief(input);
   const base = storyTypes.story_types;
   const min = Math.max(3, input.constraints.minimum_story_options);
   const selected = base.slice(0, Math.min(base.length, Math.max(min, 3)));
@@ -261,17 +425,17 @@ function createStoryGenerator(input, storyTypes) {
         story_type: type.name,
         story_title: `${type.name}で進める${input.theme}`,
         one_line_summary: type.purpose,
-        background: `${input.theme}に関する環境変化を、${type.name}の観点で整理する。`,
-        issue: index === 0 ? "市場機会の大きさを投資判断に変換できていない" : index === 1 ? "現場課題と施策の接続が弱い" : "競合との差別化理由が弱い",
+        background: `${input.theme}に関する環境変化を、${type.name}の観点で整理する。対象顧客は${inferred.assumptions.target_customer}と仮置きする。`,
+        issue: index === 0 ? "市場機会の大きさを投資判断に変換できていない" : index === 1 ? `${inferred.assumptions.customer_pain}と施策の接続が弱い` : `${inferred.assumptions.differentiation}が競合差別化として成立するか未検証`,
         objective: `${input.target_reader}が採用可否を判断できるストーリーを作る`,
-        proposal_direction: `${type.purpose}方向で、背景、課題、施策、KPIを接続する`,
+        proposal_direction: `${type.purpose}方向で、サービス仮説「${inferred.assumptions.service_hypothesis}」、課題、施策、KPIを接続する`,
         target_reader_fit: index === 0 ? "成長投資を重視する読者に合う" : index === 1 ? "現場課題と実行性を重視する読者に合う" : "競争優位や差別化を重視する読者に合う",
         strength: index === 0 ? "将来性を打ち出しやすい" : index === 1 ? "課題解決の必然性を示しやすい" : "勝ち筋を明確にしやすい",
         weakness: index === 0 ? "根拠が弱いと楽観的に見える" : index === 1 ? "大きな成長性の説明が弱くなる可能性がある" : "競合情報の質に左右される",
         required_evidence: [
-          buildSearchQuery(input.theme, "市場規模 成長率"),
-          buildSearchQuery(input.theme, "顧客課題 導入事例"),
-          buildSearchQuery(input.theme, "競合比較")
+          buildSearchQuery(`${input.theme} ${inferred.assumptions.target_customer}`, "市場規模 成長率"),
+          buildSearchQuery(`${input.theme} ${inferred.assumptions.customer_pain}`, "顧客課題 導入事例"),
+          buildSearchQuery(`${input.theme} ${inferred.assumptions.differentiation}`, "競合比較")
         ],
         best_use_case: `${type.name}の判断軸を重視する会議・稟議`
       };
@@ -291,7 +455,7 @@ function createSolutionGenerator(stories) {
           target_issue: story.issue,
           expected_effect: "短期で効果検証し、意思決定者に継続投資の根拠を示す",
           required_resources: ["責任者", "業務担当者", "データ・業務プロセス", "効果測定環境"],
-          implementation_steps: ["対象領域を選定", "現状KPIを確認", "小規模に試行", "効果測定", "拡張判断"],
+          implementation_steps: ["対象顧客を仮説設定", "課題ヒアリング", "小規模に試行", "効果測定", "拡張判断"],
           kpi: ["商談化率", "受注率", "営業工数削減", "顧客満足度", "投資対効果"],
           risks: ["データ不足", "現場定着不足", "期待効果の過大評価"],
           success_conditions: ["KPIの事前定義", "推進責任者の明確化", "検証期間の設定"]
@@ -358,7 +522,153 @@ function createEvidenceResearch(stories, solutions, criteria, input) {
   };
 }
 
-function createEvaluation(stories, criteria) {
+function createWebResearchPlan(input, evidence, webResearchConfig) {
+  const maxQueries = Number(webResearchConfig.max_queries || 6);
+  const inferred = inferBrief(input);
+  const focus = input.constraints.research_focus;
+  const baseQueries = evidence.evidence_items.slice(0, maxQueries).map((item) => ({
+    evidence_id: item.evidence_id,
+    related_story_id: item.related_story_id,
+    related_solution_id: item.related_solution_id,
+    evaluation_criterion: item.evaluation_criterion,
+    query: buildSearchQuery(`${input.theme} ${inferred.assumptions.target_customer} ${inferred.assumptions.customer_pain} ${focus}`, item.evaluation_criterion),
+    target_fact: `${item.evaluation_criterion}を評価するための事実、統計、事例`,
+    priority: item.evaluation_criterion.includes("市場") || item.evaluation_criterion.includes("投資") ? "high" : "medium",
+    search_url: searchUrl(buildSearchQuery(`${input.theme} ${focus}`, item.evaluation_criterion))
+  }));
+
+  return {
+    status: "planned",
+    created_at: new Date().toISOString(),
+    input_theme: input.theme,
+    research_focus: focus,
+    research_depth: input.constraints.research_depth,
+    provider: webResearchConfig.search_provider,
+    max_queries: maxQueries,
+    queries: baseQueries
+  };
+}
+
+async function runWebResearch(plan, webResearchConfig, enabled) {
+  const results = [];
+  const checkedAt = todayIsoDate();
+  const timeoutMs = Number(webResearchConfig.request_timeout_ms || 8000);
+  const maxSources = Number(webResearchConfig.max_sources_per_query || 2);
+
+  if (!enabled) {
+    return {
+      status: "skipped",
+      checked_at: checkedAt,
+      reason: skipWebResearch ? "Web research skipped by check/flag/env." : "Web research disabled by template input.",
+      results
+    };
+  }
+
+  for (const query of plan.queries) {
+    const queryResult = {
+      evidence_id: query.evidence_id,
+      query: query.query,
+      target_fact: query.target_fact,
+      checked_at: checkedAt,
+      status: "pending",
+      sources: [],
+      error: ""
+    };
+
+    try {
+      const searchHtml = await fetchText(`https://duckduckgo.com/html/?q=${encodeURIComponent(query.query)}`, timeoutMs);
+      const searchResults = parseSearchResults(searchHtml).slice(0, maxSources);
+      for (const result of searchResults) {
+        try {
+          const pageText = await fetchText(result.url, timeoutMs);
+          const page = extractPageSummary(pageText, result.title);
+          queryResult.sources.push({
+            source_name: page.title || result.title || sourceNameFromUrl(result.url),
+            source_url: result.url,
+            checked_at: checkedAt,
+            extracted_summary: page.summary,
+            reliability: "confirmed_web"
+          });
+        } catch (error) {
+          queryResult.sources.push({
+            source_name: result.title || sourceNameFromUrl(result.url),
+            source_url: result.url,
+            checked_at: checkedAt,
+            extracted_summary: "",
+            reliability: "fetch_failed",
+            error: error.message
+          });
+        }
+      }
+      queryResult.status = queryResult.sources.some((source) => source.reliability === "confirmed_web") ? "confirmed" : "search_only";
+      if (searchResults.length === 0) queryResult.error = "No search results parsed.";
+    } catch (error) {
+      queryResult.status = "failed";
+      queryResult.error = error.message;
+    }
+
+    results.push(queryResult);
+  }
+
+  const confirmedSourceCount = results.flatMap((item) => item.sources).filter((source) => source.reliability === "confirmed_web").length;
+  return {
+    status: confirmedSourceCount > 0 ? "completed" : "needs_research",
+    checked_at: checkedAt,
+    confirmed_source_count: confirmedSourceCount,
+    required_confirmed_sources: Number(webResearchConfig.approval_gate?.minimum_confirmed_sources || 3),
+    results
+  };
+}
+
+function enrichEvidenceWithWebResearch(evidence, webResearch) {
+  const resultByEvidenceId = new Map(webResearch.results.map((item) => [item.evidence_id, item]));
+  const evidenceItems = evidence.evidence_items.map((item) => {
+    const researched = resultByEvidenceId.get(item.evidence_id);
+    const confirmed = researched?.sources?.find((source) => source.reliability === "confirmed_web");
+    if (!confirmed) {
+      return {
+        ...item,
+        research_status: researched?.status || "not_researched",
+        checked_at: researched?.checked_at || "",
+        research_error: researched?.error || ""
+      };
+    }
+    return {
+      ...item,
+      fact: confirmed.extracted_summary || item.fact,
+      source_name: confirmed.source_name,
+      source_url: confirmed.source_url,
+      published_date: "",
+      checked_at: confirmed.checked_at,
+      reliability: "confirmed_web",
+      research_status: "confirmed",
+      research_error: "",
+      implication: `${item.evaluation_criterion}の評価根拠として確認済みWeb情報を利用する。`
+    };
+  });
+
+  const missingEvidence = evidenceItems
+    .filter((item) => item.reliability !== "confirmed_web")
+    .map((item) => ({
+      item: `${item.evidence_id}: ${item.evaluation_criterion}`,
+      reason: item.research_error || "Web取得済み根拠が不足",
+      impact_on_evaluation: "該当評価軸は仮説評価として扱い、Excel確認時に追加調査判断が必要"
+    }));
+
+  return {
+    ...evidence,
+    evidence_items: evidenceItems,
+    missing_evidence: missingEvidence,
+    web_research_summary: {
+      status: webResearch.status,
+      checked_at: webResearch.checked_at,
+      confirmed_source_count: webResearch.confirmed_source_count || 0,
+      required_confirmed_sources: webResearch.required_confirmed_sources || 0
+    }
+  };
+}
+
+function createEvaluation(stories, criteria, evidence) {
   const profiles = [
     [5, 4, 3, 3, 4, 3, 5, 3, 3, 4],
     [3, 5, 3, 5, 4, 5, 3, 4, 4, 5],
@@ -368,17 +678,41 @@ function createEvaluation(stories, criteria) {
   ];
 
   const evaluationTable = stories.story_options.map((story, index) => {
+    const storyEvidence = evidence.evidence_items.filter((item) => item.related_story_id === story.story_id);
     const scores = {};
+    const initial_scores = {};
+    const score_confidence = {};
+    const evidence_adjustments = [];
     criteria.criteria.forEach((criterion, criterionIndex) => {
-      scores[criterion] = profiles[index % profiles.length][criterionIndex] || 3;
+      const initialScore = profiles[index % profiles.length][criterionIndex] || 3;
+      const evidenceForCriterion = storyEvidence.filter((item) => item.evaluation_criterion === criterion);
+      const confirmedCount = evidenceForCriterion.filter((item) => item.reliability === "confirmed_web").length;
+      const confidence = confirmedCount > 0 ? "high" : "low";
+      const adjustedScore = confirmedCount > 0 ? initialScore : Math.max(1, initialScore - 1);
+      initial_scores[criterion] = initialScore;
+      scores[criterion] = adjustedScore;
+      score_confidence[criterion] = confidence;
+      evidence_adjustments.push({
+        criterion,
+        initial_score: initialScore,
+        adjusted_score: adjustedScore,
+        confidence,
+        confirmed_evidence_count: confirmedCount,
+        reason: confirmedCount > 0 ? "Web確認済み根拠あり" : "根拠不足のため1点減点"
+      });
     });
     const total = Object.values(scores).reduce((sum, score) => sum + score, 0);
+    const initialTotal = Object.values(initial_scores).reduce((sum, score) => sum + score, 0);
     return {
       story_id: story.story_id,
       story_title: story.story_title,
+      initial_scores,
       scores,
+      score_confidence,
+      evidence_adjustments,
+      initial_total_score: initialTotal,
       total_score: total,
-      evidence_based_reason: `初期評価。outputs/${templateId}/YYYYMMDD_HHMMSS/06_evidence_research.json の検索URLで根拠確認後に更新する。`,
+      evidence_based_reason: `Web根拠の有無に基づき初期スコアを補正。確認済み根拠がない評価軸は信頼度lowとして1点減点。`,
       main_risks: [story.weakness, "根拠が未確認の評価軸は追加調査が必要"],
       evaluation_comment: `${story.story_type}は、${story.strength}一方で、${story.weakness}。`
     };
@@ -561,8 +895,8 @@ function createEvidenceMapping(argumentTree, evidenceResearch, input) {
           required_evidence: argument.level3.map((item) => item.evidence_type),
           mapped_evidence_ids: evidence ? [evidence.evidence_id] : [],
           source_candidates: evidence ? [evidence.source_url, searchUrl(query)] : [searchUrl(query)],
-          evidence_status: "requires_confirmation",
-          note: "初期実装では検索候補を紐づける。実調査後に出典URLへ置換する。"
+          evidence_status: evidence?.reliability === "confirmed_web" ? "confirmed_web" : "requires_confirmation",
+          note: evidence?.reliability === "confirmed_web" ? "Web調査で確認済みの出典を紐づけ" : "Web取得済み根拠が不足。Excelで追加確認が必要"
         };
       })
     )
@@ -590,9 +924,25 @@ function createSlideMessageBuilder(chapterSummaries, argumentTree) {
         level2_id: argument.level2_id,
         slide_title: argument.level2,
         main_message: argument.message,
-        support_points: argument.level3.map((item) => item.message),
+        support_points: argument.level3.map((item) => item.evidence_type),
         one_message_check: true
       });
+
+      for (const level3 of argument.level3) {
+        slideMessages.push({
+          slide_kind: "evidence",
+          chapter_id: chapter.chapter_id,
+          level2_id: argument.level2_id,
+          level3_id: level3.level3_id,
+          slide_title: level3.evidence_type,
+          main_message: level3.message,
+          support_points: [
+            `対象論点: ${argument.level2}`,
+            "出典URLと確認日を添えて事実化する"
+          ],
+          one_message_check: true
+        });
+      }
     }
   }
 
@@ -663,7 +1013,10 @@ function createSlideLayoutSelector(slideMessages, layoutRegistry, chapterLayoutM
 
       return {
         slide_key: `S${String(index + 1).padStart(2, "0")}`,
+        slide_kind: slide.slide_kind,
         chapter_id: slide.chapter_id,
+        level2_id: slide.level2_id || "",
+        level3_id: slide.level3_id || "",
         slide_title: slide.slide_title,
         main_message: slide.main_message,
         logical_role: layout?.logical_role || "一覧",
@@ -712,16 +1065,24 @@ function buildStructuredItems(items, bodyMax) {
 function createSlideJsonBuilder(slideLayouts, evidenceMapping) {
   return {
     slides: slideLayouts.slide_layouts.map((slide, index) => {
-      const mapped = evidenceMapping.evidence_mappings.find((item) => item.chapter_id === slide.chapter_id);
+      const mapped = slide.level2_id
+        ? evidenceMapping.evidence_mappings.find((item) => item.level2_id === slide.level2_id)
+        : evidenceMapping.evidence_mappings.find((item) => item.chapter_id === slide.chapter_id);
       const titleMax = slide.constraints.title_max;
       const bodyMax = slide.constraints.body_max;
       const contentItems = buildStructuredItems(slide.content_items, bodyMax);
+      const isChapterOverview = slide.layout_id === "chapter_overview";
+      const level = isChapterOverview ? "chapter_overview" : (slide.slide_kind === "evidence" ? "level3" : "level2");
+      const slideRole = isChapterOverview ? "章全体像" : (slide.slide_kind === "evidence" ? "根拠・事実" : "論点説明");
+      const leadText = isChapterOverview
+        ? "この章で証明する流れを整理する。"
+        : (slide.slide_kind === "evidence" ? "この根拠の事実・数値・出典を確認する。" : "この論点の理由、具体例、示唆を整理する。");
       return {
         slide_no: index + 1,
         chapter: slide.chapter_id,
-        level: slide.layout_id === "chapter_overview" ? "chapter_overview" : "level2",
+        level,
         slide_title: slide.slide_title,
-        slide_role: slide.layout_id === "chapter_overview" ? "章全体像" : "論点説明",
+        slide_role: slideRole,
         main_message: truncateText(slide.main_message, bodyMax),
         layout_id: slide.layout_id,
         layout_type: slide.layout_id,
@@ -736,7 +1097,7 @@ function createSlideJsonBuilder(slideLayouts, evidenceMapping) {
             max_chars: bodyMax
           },
           lead_box: {
-            text: slide.layout_id === "chapter_overview" ? "この章で証明する流れを整理する。" : "この論点の理由、具体例、示唆を整理する。",
+            text: leadText,
             max_chars: bodyMax
           },
           body_box: {
@@ -926,17 +1287,20 @@ function createSlideValidation(slideJson, chapterSummaries, layoutRegistry, fitV
 function createValidation(outputs) {
   const storyCount = outputs.stories.story_options.length;
   const missing = outputs.evidence.missing_evidence.length;
+  const confirmed = outputs.evidence.web_research_summary?.confirmed_source_count || 0;
+  const required = outputs.evidence.web_research_summary?.required_confirmed_sources || 0;
+  const webStatus = required > 0 && confirmed >= required ? "ok" : "needs_research";
   return {
     validation_results: [
       { item: "テーマ解釈", status: "ok", comment: "入力テーマから意思決定論点へ変換済み" },
       { item: "複数案", status: storyCount >= 3 ? "ok" : "ng", comment: `${storyCount}案を生成` },
       { item: "施策対応", status: "ok", comment: "各ストーリーに2施策を生成" },
       { item: "比較評価", status: "ok", comment: "固定評価軸でスコアリング済み" },
-      { item: "Web根拠", status: "needs_research", comment: `${missing}件の不足情報あり。検索URLで追加確認が必要` },
+      { item: "Web根拠", status: webStatus, comment: `確認済み出典 ${confirmed}/${required}件。不足 ${missing}件` },
       { item: "企画書構成", status: "ok", comment: "推奨案をスライド構成へ変換済み" }
     ],
     next_actions: [
-      "検索URLから根拠を確認し、06_evidence_research.jsonを更新する",
+      ...(webStatus === "ok" ? [] : ["Web取得済み根拠が不足。ExcelのWeb調査結果を確認し、追加調査または承認判断を行う"]),
       "評価スコアを実根拠に基づいて再調整する",
       "承認用ファイルで採用ストーリーを確認する",
       "必要に応じてPowerPoint化する"
@@ -950,6 +1314,7 @@ function markdownList(items) {
 
 function createFinalReport(input, outputs) {
   const rec = outputs.recommendation.recommended_story;
+  const inferred = inferBrief(input);
   const evalRows = outputs.evaluation.evaluation_table
     .map((row) => `| ${row.story_id} | ${row.story_title} | ${row.total_score} | ${row.evaluation_comment} |`)
     .join("\n");
@@ -974,9 +1339,18 @@ function createFinalReport(input, outputs) {
 ## 1. テーマ解釈
 
 - 入力テーマ: ${input.theme}
+- 資料タイプ: ${inferred.document_type}
 - 企画目的: ${input.proposal_goal}
 - 想定読者: ${input.target_reader}
 - 解釈: ${outputs.theme.interpreted_theme}
+
+### Codexが置いた作成仮説
+
+${markdownList(Object.entries(inferred.assumptions).map(([key, value]) => `${key}: ${value}`))}
+
+### Excelで確認すべき未確定事項
+
+${inferred.confirmation_points.length > 0 ? markdownList(inferred.confirmation_points) : "- 未確定事項は明示されていません"}
 
 ## 2. 背景・環境変化
 
@@ -1005,9 +1379,9 @@ ${outputs.solutions.solution_options.map((group) => {
 
 ## 6. エビデンス整理
 
-この初期実装では外部検索APIを直接呼びません。以下の検索候補から事実確認を行い、根拠URLを追記してください。
+Web調査ステータス: ${outputs.evidence.web_research_summary?.status || "unknown"} / 確認済み出典: ${outputs.evidence.web_research_summary?.confirmed_source_count || 0}
 
-${markdownList(outputs.evidence.evidence_items.slice(0, 10).map((item) => `${item.evidence_id}: ${item.evaluation_criterion} / ${item.source_url}`))}
+${markdownList(outputs.evidence.evidence_items.slice(0, 10).map((item) => `${item.evidence_id}: ${item.evaluation_criterion} / ${item.reliability} / ${item.source_name} / ${item.source_url}`))}
 
 ## 7. 比較評価表
 
@@ -1090,15 +1464,87 @@ ${rows}
 `;
 }
 
+function createApprovalRequest(runDir, input, outputs) {
+  const rec = outputs.recommendation.recommended_story;
+  const inferred = inferBrief(input);
+  return {
+    status: "pending_review",
+    template_id: templateId,
+    run_id: path.basename(runDir),
+    input_theme: input.theme,
+    review_required_before: "slides",
+    review_files: {
+      workbook: path.join(runDir, "proposal_story_analysis.xlsx"),
+      review_markdown: path.join(runDir, "selected_story_review.md"),
+      final_report: path.join(runDir, "final_report.md")
+    },
+    recommended_story: {
+      story_id: rec.story_id,
+      story_title: rec.story_title,
+      summary: rec.recommendation_summary
+    },
+    briefing_assumptions: inferred.assumptions,
+    unknowns_to_confirm: inferred.unknowns,
+    allowed_decisions: [
+      "approve",
+      "revise_story",
+      "merge_options",
+      "additional_research",
+      "stop"
+    ],
+    web_research_gate: {
+      status: outputs.evidence.web_research_summary?.status || "unknown",
+      confirmed_source_count: outputs.evidence.web_research_summary?.confirmed_source_count || 0,
+      required_confirmed_sources: outputs.evidence.web_research_summary?.required_confirmed_sources || 0,
+      missing_evidence_count: outputs.evidence.missing_evidence.length
+    },
+    next_command_after_review: `npm run continue -- outputs/${templateId}/${path.basename(runDir)}`,
+    rule: "PowerPoint generation must not run until approval_decision.json is recorded with decision=approve."
+  };
+}
+
 function flattenObject(obj) {
   return Object.entries(obj).map(([key, value]) => [key, Array.isArray(value) || typeof value === "object" ? JSON.stringify(value) : value]);
 }
 
 function createWorkbookRows(input, outputs) {
+  const inferred = inferBrief(input);
   return [
+    {
+      name: "00_レビュー手順",
+      rows: [
+        ["項目", "内容"],
+        ["目的", "このExcelを確認して、スライド作成へ進めるか判断する"],
+        ["最初に見るシート", "01_承認確認 / 08_推奨案 / 07_比較評価"],
+        ["確認観点", "推奨案を採用するか、別案にするか、統合するか、追加調査するか"],
+        ["次の操作", "承認後に npm run continue -- <analysis_run_dir> を実行する"],
+        ["注意", "この段階ではPowerPointを作らない。Excel確認後の承認で初めてスライドを生成する"]
+      ]
+    },
+    {
+      name: "01_承認確認",
+      rows: [
+        ["field", "value", "input_rule", "description"],
+        ["decision", "", "approve / revise_story / merge_options / additional_research / stop", "次工程の判断。approve の場合だけPowerPoint生成へ進む"],
+        ["selected_story", outputs.recommendation.recommended_story.story_id, "A / B / C", "採用するストーリー案"],
+        ["merge_policy", "", "自由記述", "merge_options の場合、統合したい案や方針を書く"],
+        ["additional_research_request", "", "自由記述", "additional_research の場合、追加で調べたいことを書く"],
+        ["slide_generation", "yes", "yes / no", "PowerPoint生成を許可するか"],
+        ["review_comment", "", "自由記述", "承認・差し戻し理由、注意点"]
+      ]
+    },
     {
       name: "00_入力テーマ",
       rows: [["項目", "内容"], ...flattenObject(input)]
+    },
+    {
+      name: "00_作成仮説",
+      rows: [
+        ["項目", "仮説・回答", "状態"],
+        ["資料タイプ", inferred.document_type, "user_or_default"],
+        ...Object.entries(inferred.assumptions).map(([key, value]) => [key, value, inferred.unknowns.includes(key) ? "codex_assumption" : "user_answer"]),
+        ...inferred.confirmation_points.map((point) => ["確認事項", point, "needs_confirmation"])
+      ]
     },
     {
       name: "01_質問設計",
@@ -1106,7 +1552,18 @@ function createWorkbookRows(input, outputs) {
     },
     {
       name: "02_背景環境",
-      rows: [["カテゴリ", "論点", "根拠", "URL", "示唆"], ...outputs.environment.research_queries.map((q) => [q.category, q.query, "未調査", q.url, "企画書で使える背景を確認する"])]
+      rows: [["カテゴリ", "論点", "根拠", "URL", "示唆"], ...outputs.environment.research_queries.map((q) => [q.category, q.query, "Web調査結果はWeb調査結果シートを参照", q.url, "企画書で使える背景を確認する"])]
+    },
+    {
+      name: "02_Web調査計画",
+      rows: [["ID", "評価軸", "検索クエリ", "狙う根拠", "優先度", "検索URL"], ...outputs.webResearchPlan.queries.map((q) => [q.evidence_id, q.evaluation_criterion, q.query, q.target_fact, q.priority, q.search_url])]
+    },
+    {
+      name: "03_Web調査結果",
+      rows: [["ID", "検索クエリ", "状態", "出典名", "URL", "確認日", "信頼性", "抽出要約", "エラー"], ...outputs.webResearch.results.flatMap((r) => {
+        if (!r.sources || r.sources.length === 0) return [[r.evidence_id, r.query, r.status, "", "", r.checked_at, "", "", r.error]];
+        return r.sources.map((s) => [r.evidence_id, r.query, r.status, s.source_name, s.source_url, s.checked_at, s.reliability, s.extracted_summary, s.error || r.error || ""]);
+      })]
     },
     {
       name: "03_課題目的",
@@ -1122,11 +1579,15 @@ function createWorkbookRows(input, outputs) {
     },
     {
       name: "06_エビデンス",
-      rows: [["ID", "案", "施策", "評価軸", "事実", "出典", "URL", "信頼性", "示唆"], ...outputs.evidence.evidence_items.map((e) => [e.evidence_id, e.related_story_id, e.related_solution_id, e.evaluation_criterion, e.fact, e.source_name, e.source_url, e.reliability, e.implication])]
+      rows: [["ID", "案", "施策", "評価軸", "事実", "出典", "URL", "確認日", "信頼性", "調査状態", "示唆"], ...outputs.evidence.evidence_items.map((e) => [e.evidence_id, e.related_story_id, e.related_solution_id, e.evaluation_criterion, e.fact, e.source_name, e.source_url, e.checked_at || "", e.reliability, e.research_status || "", e.implication])]
     },
     {
       name: "07_比較評価",
-      rows: [["案", "タイトル", ...Object.keys(outputs.evaluation.evaluation_table[0].scores), "総合点", "コメント"], ...outputs.evaluation.evaluation_table.map((e) => [e.story_id, e.story_title, ...Object.values(e.scores), e.total_score, e.evaluation_comment])]
+      rows: [["案", "タイトル", ...Object.keys(outputs.evaluation.evaluation_table[0].scores), "初期総合点", "根拠反映後総合点", "コメント"], ...outputs.evaluation.evaluation_table.map((e) => [e.story_id, e.story_title, ...Object.values(e.scores), e.initial_total_score, e.total_score, e.evaluation_comment])]
+    },
+    {
+      name: "07_評価補正",
+      rows: [["案", "評価軸", "初期スコア", "根拠反映後スコア", "信頼度", "確認済み根拠数", "補正理由"], ...outputs.evaluation.evaluation_table.flatMap((e) => e.evidence_adjustments.map((a) => [e.story_id, a.criterion, a.initial_score, a.adjusted_score, a.confidence, a.confirmed_evidence_count, a.reason]))]
     },
     {
       name: "08_推奨案",
@@ -1141,8 +1602,8 @@ function createWorkbookRows(input, outputs) {
       rows: [["項目", "状態", "コメント"], ...outputs.validation.validation_results.map((v) => [v.item, v.status, v.comment])]
     },
     {
-      name: "11_承認確認",
-      rows: [["確認項目", "回答"], ["このストーリーで企画書化するか", ""], ["別案を採用するか", ""], ["複数案を統合するか", ""], ["追加調査を行うか", ""]]
+      name: "11_承認確認_予備",
+      rows: [["項目", "内容"], ["備考", "入力は先頭の 01_承認確認 シートに集約しました"]]
     },
     {
       name: "12_章構造",
@@ -1523,11 +1984,13 @@ function createPptxFromTemplate(slideJson, templatePath, outputPath) {
 function loadRuntimeConfig() {
   const input = normalizeInput(readJson(templateRoot, "inputs/user-theme.json"));
   const order = readJson(templateRoot, "config/agent-order.json");
+  const agentPipeline = readJson(templateRoot, "config/agent-pipeline.json");
   const storyTypes = readJson(templateRoot, "config/story-types.json");
   const criteria = readJson(templateRoot, "config/evaluation-criteria.json");
   const layoutRegistry = readJson(templateRoot, "config/layout-registry.json");
   const layoutSelectionRules = readJson(templateRoot, "config/layout-selection-rules.json");
   const chapterLayoutMap = readJson(templateRoot, "config/chapter-layout-map.json");
+  const webResearchConfig = readJson(templateRoot, "config/web-research.json");
   const designReference = {
     file: "templates/proposal-story/assets/design/slide_layout_collection_native.pptx",
     layout_management_file: "templates/proposal-story/assets/design/proposal_layout_management.xlsx",
@@ -1536,19 +1999,23 @@ function loadRuntimeConfig() {
     slide_count: 57,
     usage: "出力スライドのデザイン参照。Renderer/PPT出力時はこのネイティブPPTXのデザインを優先する。"
   };
-  return { input, order, storyTypes, criteria, layoutRegistry, layoutSelectionRules, chapterLayoutMap, designReference };
+  return { input, order, agentPipeline, storyTypes, criteria, layoutRegistry, layoutSelectionRules, chapterLayoutMap, webResearchConfig, designReference };
 }
 
-function buildOutputs(config) {
-  const { input, order, storyTypes, criteria, layoutRegistry, layoutSelectionRules, chapterLayoutMap, designReference } = config;
+async function buildOutputs(config) {
+  const { input, order, agentPipeline, storyTypes, criteria, layoutRegistry, layoutSelectionRules, chapterLayoutMap, webResearchConfig, designReference } = config;
   const orchestrator = createOrchestrator(input, order);
   const theme = createThemeInterpreter(input);
   const environment = createEnvironmentResearch(input);
   const issue = createIssueObjective(input, environment);
   const stories = createStoryGenerator(input, storyTypes);
   const solutions = createSolutionGenerator(stories);
-  const evidence = createEvidenceResearch(stories, solutions, criteria, input);
-  const evaluation = createEvaluation(stories, criteria);
+  const initialEvidence = createEvidenceResearch(stories, solutions, criteria, input);
+  const webResearchPlan = createWebResearchPlan(input, initialEvidence, webResearchConfig);
+  const webResearchEnabled = input.constraints.must_use_web_evidence && webResearchConfig.enabled_by_default && !skipWebResearch;
+  const webResearch = await runWebResearch(webResearchPlan, webResearchConfig, webResearchEnabled);
+  const evidence = enrichEvidenceWithWebResearch(initialEvidence, webResearch);
+  const evaluation = createEvaluation(stories, criteria, evidence);
   const recommendation = createRecommendation(evaluation, stories, solutions);
   const deck = createDeckOutline(input, recommendation);
   const chapters = createChapterDesigner(input, issue, recommendation);
@@ -1564,12 +2031,15 @@ function buildOutputs(config) {
   const finalSlidePlan = createFinalSlidePlan(slideJson, slideLayouts, contentFitValidation, designReference);
   const validation = createValidation({ stories, solutions, evidence, evaluation, recommendation, deck, chapters, slideJson, slideValidation });
   const outputs = {
+    agentPipeline,
     orchestrator,
     theme,
     environment,
     issue,
     stories,
     solutions,
+    webResearchPlan,
+    webResearch,
     evidence,
     evaluation,
     recommendation,
@@ -1599,12 +2069,16 @@ function buildOutputs(config) {
 
 function analysisFiles() {
   return [
+    "agent_prompt_chain.json",
+    "approval_request.json",
     "00_orchestrator.json",
     "01_theme_interpreter.json",
     "02_environment_research.json",
     "03_issue_objective.json",
     "04_story_generator.json",
     "05_solution_generator.json",
+    "web_research_plan.json",
+    "web_research_results.json",
     "06_evidence_research.json",
     "07_evaluation.json",
     "08_recommendation.json",
@@ -1631,6 +2105,7 @@ function analysisFiles() {
 
 function slideFiles() {
   return [
+    "approval_decision.json",
     "22_powerpoint_exporter.json",
     "proposal_story_slides.pptx"
   ];
@@ -1647,12 +2122,16 @@ function writeAnalysisOutputs(runDir, input, outputs, workbookRows, phase) {
   };
 
   writeJson(runDir, "run_manifest.json", manifest);
+  writeJson(runDir, "agent_prompt_chain.json", outputs.agentPipeline);
+  writeJson(runDir, "approval_request.json", createApprovalRequest(runDir, input, outputs));
   writeJson(runDir, "00_orchestrator.json", outputs.orchestrator);
   writeJson(runDir, "01_theme_interpreter.json", outputs.theme);
   writeJson(runDir, "02_environment_research.json", outputs.environment);
   writeJson(runDir, "03_issue_objective.json", outputs.issue);
   writeJson(runDir, "04_story_generator.json", outputs.stories);
   writeJson(runDir, "05_solution_generator.json", outputs.solutions);
+  writeJson(runDir, "web_research_plan.json", outputs.webResearchPlan);
+  writeJson(runDir, "web_research_results.json", outputs.webResearch);
   writeJson(runDir, "06_evidence_research.json", outputs.evidence);
   writeJson(runDir, "07_evaluation.json", outputs.evaluation);
   writeJson(runDir, "08_recommendation.json", outputs.recommendation);
@@ -1677,6 +2156,16 @@ function writeAnalysisOutputs(runDir, input, outputs, workbookRows, phase) {
 }
 
 function exportSlides(runDir) {
+  const approvalDecisionPath = path.join(runDir, "approval_decision.json");
+  if (!forceSlides) {
+    if (!fs.existsSync(approvalDecisionPath)) {
+      throw new Error(`Approval decision not found. Review Excel first, then run: npm run continue -- ${path.relative(root, runDir)}`);
+    }
+    const approvalDecision = JSON.parse(fs.readFileSync(approvalDecisionPath, "utf8"));
+    if (approvalDecision.decision !== "approve") {
+      throw new Error(`Slides are blocked because approval decision is '${approvalDecision.decision}'.`);
+    }
+  }
   const slideJsonPath = path.join(runDir, "17_slide_json_builder.json");
   if (!fs.existsSync(slideJsonPath)) {
     throw new Error(`Slide JSON not found. Run analysis first: ${slideJsonPath}`);
@@ -1702,10 +2191,10 @@ function exportSlides(runDir) {
   return pptxExport;
 }
 
-function run() {
+async function run() {
   ensureDirs();
   const config = loadRuntimeConfig();
-  const { input, outputs, workbookRows } = buildOutputs(config);
+  const { input, outputs, workbookRows } = await buildOutputs(config);
 
   if (checkOnly) {
     console.log("OK: configuration and input files are readable.");
@@ -1743,10 +2232,13 @@ function run() {
   if (phaseArg === "all") {
     console.log(`- ${path.join(runDir, "proposal_story_slides.pptx")}`);
   } else {
-    console.log("Slide phase is pending. Run:");
-    console.log(`npm run slides:proposal-story -- ${path.relative(root, runDir)}`);
+    console.log("Review gate is pending. Open the Excel output, then run:");
+    console.log(`npm run continue -- ${path.relative(root, runDir)}`);
   }
   console.log(`- ${path.join(runDir, "selected_story_review.md")}`);
 }
 
-run();
+run().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

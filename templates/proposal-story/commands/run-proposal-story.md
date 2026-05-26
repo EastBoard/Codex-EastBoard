@@ -9,14 +9,22 @@ npm run analysis:proposal-story
 ## Phase 2: スライド作成・PowerPoint出力
 
 ```bash
-npm run slides:proposal-story -- --run-dir outputs/proposal-story/YYYYMMDD_HHMMSS
+npm run continue -- outputs/proposal-story/YYYYMMDD_HHMMSS
 ```
 
-## 一括実行
+Web調査が不足している場合、既定では approve できず停止します。例外的に進める場合だけ以下を使います。
+
+```bash
+npm run continue:yes -- outputs/proposal-story/YYYYMMDD_HHMMSS --allow-incomplete-research
+```
+
+## 起動
 
 ```bash
 npm run start
 ```
+
+`npm run start` は Phase 1 のExcel出力で必ず停止します。Excelと確認用Markdownを人間が確認し、承認した場合だけ `npm run continue -- ...` でPhase 2へ進みます。
 
 ## 処理順
 
@@ -45,3 +53,5 @@ npm run start
 23. Excel出力シート構成を生成する
 24. `outputs/proposal-story/YYYYMMDD_HHMMSS/` フォルダを作成する
 25. Markdown、Excel、承認用ファイル、layout_registry.csv、final_slide_plan.json を同じ出力フォルダへ保存する
+26. ここで停止し、PowerPointは生成しない
+27. `approval_decision.json` が `approve` になった場合だけ、PowerPointを生成する

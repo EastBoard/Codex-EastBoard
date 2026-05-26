@@ -41,13 +41,57 @@ outputs/
 14. content_fit_validator で文字数・要素数を検証
 15. 指定PPTXをデザイン参照として保持
 
-## 使い方
+## 起動時のふるまい
+
+`npm start` は `templates/` を起点にした対話CLIを起動します。Codexまたは利用者は、起動後に以下の順で進めます。
+
+1. `templates/*/template.json` から利用可能なテンプレートを読み込む
+2. テンプレートメニューを表示し、実行するテンプレートを選ぶ
+3. 選択テンプレートの `questions.json` に沿って質問する
+4. 回答をテンプレートの入力JSONへ反映する
+5. 未定の回答はCodexが仮説化し、Excelに確認事項として残す
+6. Phase 1 の分析・Excel出力を実行する
+7. Excel確認ゲートで必ず停止する
+8. 人間が `proposal_story_analysis.xlsx` と `selected_story_review.md` を確認する
+9. 承認する場合だけ `npm run continue -- <analysis_run_dir>` でPhase 2へ進む
+
+現在選べるテンプレートは `proposal-story` です。
+
+```bash
+npm start
+```
+
+確認なしで既定値・既存入力を使って分析フェーズまで試す場合は以下を使えます。
+
+```bash
+node src/template-cli.js --defaults
+```
+
+Excel確認後にPowerPoint生成へ進める場合は以下を使います。
+
+```bash
+npm run continue -- outputs/proposal-story/YYYYMMDD_HHMMSS
+```
+
+コマンドや入力反映の流れだけ確認する場合は以下を使えます。
+
+```bash
+node src/template-cli.js --dry-run
+```
+
+テンプレート一覧だけを見る場合は以下です。
+
+```bash
+node src/template-cli.js --list
+```
+
+## 直接実行
 
 1. `templates/proposal-story/inputs/user-theme.json` を編集します。
 2. 以下を実行します。
 
 ```bash
-npm run start
+npm run generate:proposal-story
 ```
 
 または明示的に以下を実行します。
@@ -62,16 +106,16 @@ npm run run:proposal-story
 npm run analysis:proposal-story
 ```
 
-Excelと確認用ファイルを見て、スライド作成まで進める場合だけ以下を実行します。
+Excelと確認用ファイルを見て、承認する場合だけ以下を実行します。
 
 ```bash
-npm run slides:proposal-story -- --run-dir outputs/proposal-story/YYYYMMDD_HHMMSS
+npm run continue -- outputs/proposal-story/YYYYMMDD_HHMMSS
 ```
 
 将来テンプレートが増えた場合は、共通入口として以下を使います。
 
 ```bash
-npm run template -- proposal-story
+npm run template
 ```
 
 ## 入力
@@ -108,6 +152,9 @@ outputs/
         ├── ...
         ├── 10_validation.json
         ├── final_report.md
+        ├── agent_prompt_chain.json
+        ├── approval_request.json
+        ├── approval_decision.json
         ├── proposal_story_analysis.xlsx
         ├── proposal_story_slides.pptx
         ├── layout_registry.csv
@@ -141,6 +188,17 @@ templates/<template-id>/
 
 出力先は `outputs/<template-id>/YYYYMMDD_HHMMSS/` に揃えます。
 
+## 今後の実装予定
+
+`proposal-story` の未実装・改善予定は `templates/proposal-story/docs/roadmap.md` に履歴として管理します。
+
 ## 注意
 
-この実装は、Codex 上で企画書ストーリー設計を進めるための土台です。外部Web検索APIには接続しません。実際のURL付き根拠は、出力された検索クエリを使ってCodexやブラウザで確認し、必要に応じて追記してください。
+この実装は、`templates/proposal-story/config/web-research.json` に従ってWeb検索とページ取得を試み、`web_research_plan.json`、`web_research_results.json`、`06_evidence_research.json`、ExcelのWeb調査シートへ結果を出力します。ネットワーク制限、検索エンジン側の応答、取得先サイトの制限により根拠が不足した場合は、Excel確認ゲートで追加調査として扱います。
+
+Web調査が不足している状態では、既定ではPowerPoint生成を承認できません。例外的に進める場合だけ `--allow-incomplete-research` を指定してください。
+
+```bash
+# 例: Web調査が0/3のままでもスライド生成を進める（非推奨）
+npm run continue:yes -- outputs/proposal-story/YYYYMMDD_HHMMSS --allow-incomplete-research
+```

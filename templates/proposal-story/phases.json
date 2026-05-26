@@ -8,9 +8,17 @@
       "requires_confirmation": false,
       "command": "npm run analysis:proposal-story",
       "outputs": [
+        "run_manifest.json",
+        "web_research_plan.json",
+        "web_research_results.json",
+        "06_evidence_research.json",
         "final_report.md",
         "proposal_story_analysis.xlsx",
-        "selected_story_review.md"
+        "selected_story_review.md",
+        "approval_request.json",
+        "agent_prompt_chain.json",
+        "layout_registry.csv",
+        "final_slide_plan.json"
       ]
     },
     {
@@ -18,9 +26,11 @@
       "name": "スライド作成・PowerPoint出力",
       "description": "分析フェーズのスライドJSONをもとに、指定PPTXデザインでPowerPointを生成する。",
       "requires_confirmation": true,
-      "confirmation_question": "スライド作成まで進めますか？",
-      "command": "npm run slides:proposal-story -- --run-dir <analysis_run_dir>",
+      "confirmation_question": "Excel確認後、承認済みとしてスライド作成まで進めますか？",
+      "command": "npm run continue -- <analysis_run_dir>",
       "outputs": [
+        "approval_decision.json",
+        "22_powerpoint_exporter.json",
         "proposal_story_slides.pptx"
       ]
     }
