@@ -1,0 +1,24 @@
+# Layout Selection Rules
+
+レイアウトは名前のみ出力してください。
+
+JSON、HTML、PPTX、座標、サイズ、CSS、SVGは出力しません。
+
+| 用途 | レイアウト |
+|---|---|
+| 課題分解・原因分析・論点整理 | issue_tree / logic_tree |
+| 比較評価 | comparison_2 / comparison_3 / competitor_comparison / option_comparison |
+| 階層整理 | hierarchy / pyramid |
+| プロセス説明 | process_flow_3 / process_flow_5 / process_flow_7 |
+| 顧客行動分析 | user_journey / funnel |
+| サービス分析 | service_blueprint |
+| 時系列説明 | timeline_3 / timeline_5 |
+| ロードマップ | roadmap_quarter / milestone_plan |
+| KPI | dashboard / scorecard / kpi_cards |
+| ランキング | bar_chart |
+| 推移 | line_chart |
+| 構成比 | pie_chart |
+| 評価 | score_table |
+| 機能比較 | feature_table |
+| 単一メッセージ | one_message |
+| 章概要 | chapter_overview |

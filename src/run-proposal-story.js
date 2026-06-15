@@ -169,10 +169,21 @@ function extractPageSummary(htmlOrText, fallbackTitle = "") {
   const titleMatch = String(htmlOrText).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const metaMatch = String(htmlOrText).match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
   const text = stripHtml(htmlOrText);
+  const keyFacts = extractKeyFacts(text, 5);
   return {
     title: stripHtml(titleMatch?.[1] || fallbackTitle),
-    summary: stripHtml(metaMatch?.[1] || text.slice(0, 450))
+    summary: stripHtml(metaMatch?.[1] || text.slice(0, 450)),
+    key_facts: keyFacts
   };
+}
+
+function extractKeyFacts(text, maxItems = 5) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (!value) return [];
+  const rawParts = value.split(/(?<=[。.!?])\s+|[。\n]+/).map((part) => part.trim()).filter(Boolean);
+  const numericParts = rawParts.filter((part) => /[0-9０-９]/.test(part) || part.includes("%") || part.includes("％"));
+  const picked = (numericParts.length > 0 ? numericParts : rawParts).slice(0, maxItems);
+  return picked.map((part) => truncateText(part, 160));
 }
 
 function normalizeInput(input) {
@@ -554,6 +565,8 @@ async function runWebResearch(plan, webResearchConfig, enabled) {
   const checkedAt = todayIsoDate();
   const timeoutMs = Number(webResearchConfig.request_timeout_ms || 8000);
   const maxSources = Number(webResearchConfig.max_sources_per_query || 2);
+  let searchFetchFailedCount = 0;
+  let pageFetchFailedCount = 0;
 
   if (!enabled) {
     return {
@@ -587,14 +600,17 @@ async function runWebResearch(plan, webResearchConfig, enabled) {
             source_url: result.url,
             checked_at: checkedAt,
             extracted_summary: page.summary,
+            key_facts: page.key_facts || [],
             reliability: "confirmed_web"
           });
         } catch (error) {
+          pageFetchFailedCount += 1;
           queryResult.sources.push({
             source_name: result.title || sourceNameFromUrl(result.url),
             source_url: result.url,
             checked_at: checkedAt,
             extracted_summary: "",
+            key_facts: [],
             reliability: "fetch_failed",
             error: error.message
           });
@@ -603,19 +619,38 @@ async function runWebResearch(plan, webResearchConfig, enabled) {
       queryResult.status = queryResult.sources.some((source) => source.reliability === "confirmed_web") ? "confirmed" : "search_only";
       if (searchResults.length === 0) queryResult.error = "No search results parsed.";
     } catch (error) {
+      searchFetchFailedCount += 1;
       queryResult.status = "failed";
       queryResult.error = error.message;
+      queryResult.sources.push({
+        source_name: "Search fallback",
+        source_url: searchUrl(query.query),
+        checked_at: checkedAt,
+        extracted_summary: "",
+        key_facts: [],
+        reliability: "search_only",
+        error: error.message
+      });
     }
 
     results.push(queryResult);
   }
 
   const confirmedSourceCount = results.flatMap((item) => item.sources).filter((source) => source.reliability === "confirmed_web").length;
+  const fallbackSourceCount = results.flatMap((item) => item.sources).filter((source) => source.reliability === "search_only").length;
+  const totalQueries = plan.queries.length;
+  const isNetworkBlocked = totalQueries > 0 && confirmedSourceCount === 0 && (searchFetchFailedCount > 0 || pageFetchFailedCount > 0);
   return {
-    status: confirmedSourceCount > 0 ? "completed" : "needs_research",
+    status: confirmedSourceCount > 0 ? "completed" : (isNetworkBlocked ? "blocked_by_network" : "needs_research"),
     checked_at: checkedAt,
     confirmed_source_count: confirmedSourceCount,
     required_confirmed_sources: Number(webResearchConfig.approval_gate?.minimum_confirmed_sources || 3),
+    fallback_source_count: fallbackSourceCount,
+    diagnostics: {
+      total_queries: totalQueries,
+      search_fetch_failed: searchFetchFailedCount,
+      page_fetch_failed: pageFetchFailedCount
+    },
     results
   };
 }
@@ -663,7 +698,9 @@ function enrichEvidenceWithWebResearch(evidence, webResearch) {
       status: webResearch.status,
       checked_at: webResearch.checked_at,
       confirmed_source_count: webResearch.confirmed_source_count || 0,
-      required_confirmed_sources: webResearch.required_confirmed_sources || 0
+      required_confirmed_sources: webResearch.required_confirmed_sources || 0,
+      fallback_source_count: webResearch.fallback_source_count || 0,
+      diagnostics: webResearch.diagnostics || {}
     }
   };
 }
@@ -905,6 +942,16 @@ function createEvidenceMapping(argumentTree, evidenceResearch, input) {
 
 function createSlideMessageBuilder(chapterSummaries, argumentTree) {
   const slideMessages = [];
+  const evidenceTemplate = (evidenceType, level2) => {
+    const t = String(evidenceType || "");
+    if (t.includes("市場規模")) return ["年次（例: 2022-2025）", "市場規模（例: 億円）", "出典URL", `対象論点: ${level2}`];
+    if (t.includes("成長率") || t.includes("CAGR")) return ["期間（例: 2022→2025）", "成長率/CAGR（%）", "出典URL", `対象論点: ${level2}`];
+    if (t.includes("投資") || t.includes("ROI") || t.includes("対効果")) return ["投資額（円）", "効果（売上/工数削減）", "回収期間", "出典URL"];
+    if (t.includes("事例") || t.includes("具体例")) return ["企業/業界", "導入内容", "効果（数値）", "出典URL"];
+    if (t.includes("競合")) return ["競合名", "提供内容", "価格/実績", "出典URL"];
+    if (t.includes("ニーズ") || t.includes("調査")) return ["調査母数 n=", "主要課題Top3", "結果（%）", "出典URL"];
+    return ["事実（数値/定義）", "示唆（意思決定に効く結論）", "出典URL", `対象論点: ${level2}`];
+  };
 
   for (const chapter of chapterSummaries.chapter_summaries) {
     slideMessages.push({
@@ -936,10 +983,7 @@ function createSlideMessageBuilder(chapterSummaries, argumentTree) {
           level3_id: level3.level3_id,
           slide_title: level3.evidence_type,
           main_message: level3.message,
-          support_points: [
-            `対象論点: ${argument.level2}`,
-            "出典URLと確認日を添えて事実化する"
-          ],
+          support_points: evidenceTemplate(level3.evidence_type, argument.level2),
           one_message_check: true
         });
       }
@@ -1062,7 +1106,42 @@ function buildStructuredItems(items, bodyMax) {
   }));
 }
 
-function createSlideJsonBuilder(slideLayouts, evidenceMapping) {
+function createSlideJsonBuilder(slideLayouts, evidenceMapping, webResearch) {
+  const confirmedSources = (webResearch?.results || [])
+    .flatMap((item) => item.sources || [])
+    .filter((source) => source.reliability === "confirmed_web");
+
+  function pickFactsForEvidenceSlide(slide) {
+    const keywords = [slide.slide_title, slide.main_message, slide.level2_id].filter(Boolean).map((v) => String(v));
+    const matches = confirmedSources
+      .filter((source) => {
+        const hay = `${source.source_name} ${source.extracted_summary} ${(source.key_facts || []).join(" ")}`.toLowerCase();
+        return keywords.some((kw) => kw && hay.includes(String(kw).toLowerCase()));
+      })
+      .slice(0, 3);
+
+    const pool = matches.length > 0 ? matches : confirmedSources.slice(0, 3);
+    const facts = [];
+    for (const source of pool) {
+      for (const fact of source.key_facts || []) {
+        facts.push(`${fact}（出典: ${source.source_name}）`);
+        if (facts.length >= 6) break;
+      }
+      if (facts.length >= 6) break;
+      if ((source.key_facts || []).length === 0 && source.extracted_summary) {
+        facts.push(`${truncateText(source.extracted_summary, 140)}（出典: ${source.source_name}）`);
+      }
+      if (facts.length >= 6) break;
+    }
+    return facts;
+  }
+
+  function defaultFactsForEvidenceSlide(slide) {
+    const items = slide.content_items || [];
+    const unique = [...new Set(items.map((item) => String(item || "").trim()).filter(Boolean))];
+    return unique.length > 0 ? unique.map((item) => `${item}: <入力>`) : [];
+  }
+
   return {
     slides: slideLayouts.slide_layouts.map((slide, index) => {
       const mapped = slide.level2_id
@@ -1070,7 +1149,11 @@ function createSlideJsonBuilder(slideLayouts, evidenceMapping) {
         : evidenceMapping.evidence_mappings.find((item) => item.chapter_id === slide.chapter_id);
       const titleMax = slide.constraints.title_max;
       const bodyMax = slide.constraints.body_max;
-      const contentItems = buildStructuredItems(slide.content_items, bodyMax);
+      const baseItems = slide.content_items || [];
+      const evidenceFacts = slide.slide_kind === "evidence" ? pickFactsForEvidenceSlide(slide) : [];
+      const fallbackFacts = slide.slide_kind === "evidence" ? defaultFactsForEvidenceSlide(slide) : [];
+      const chosen = evidenceFacts.length > 0 ? evidenceFacts : (fallbackFacts.length > 0 ? fallbackFacts : baseItems);
+      const contentItems = buildStructuredItems(chosen, bodyMax);
       const isChapterOverview = slide.layout_id === "chapter_overview";
       const level = isChapterOverview ? "chapter_overview" : (slide.slide_kind === "evidence" ? "level3" : "level2");
       const slideRole = isChapterOverview ? "章全体像" : (slide.slide_kind === "evidence" ? "根拠・事実" : "論点説明");
@@ -1467,6 +1550,11 @@ ${rows}
 function createApprovalRequest(runDir, input, outputs) {
   const rec = outputs.recommendation.recommended_story;
   const inferred = inferBrief(input);
+  const web = outputs.evidence.web_research_summary || {};
+  const webStatus = web.status || "unknown";
+  const webHint = webStatus === "blocked_by_network"
+    ? "ネットワーク制限等でWeb取得が失敗しています。Excelの追加調査リストを埋めるか、ネットワーク利用可能環境で再実行してください。例外的に進める場合は --allow-incomplete-research を指定します。"
+    : "";
   return {
     status: "pending_review",
     template_id: templateId,
@@ -1496,9 +1584,12 @@ function createApprovalRequest(runDir, input, outputs) {
       status: outputs.evidence.web_research_summary?.status || "unknown",
       confirmed_source_count: outputs.evidence.web_research_summary?.confirmed_source_count || 0,
       required_confirmed_sources: outputs.evidence.web_research_summary?.required_confirmed_sources || 0,
-      missing_evidence_count: outputs.evidence.missing_evidence.length
+      missing_evidence_count: outputs.evidence.missing_evidence.length,
+      fallback_source_count: outputs.evidence.web_research_summary?.fallback_source_count || 0,
+      diagnostics: outputs.evidence.web_research_summary?.diagnostics || {}
     },
     next_command_after_review: `npm run continue -- outputs/${templateId}/${path.basename(runDir)}`,
+    hint: webHint,
     rule: "PowerPoint generation must not run until approval_decision.json is recorded with decision=approve."
   };
 }
@@ -2024,7 +2115,7 @@ async function buildOutputs(config) {
   const evidenceMapping = createEvidenceMapping(argumentTree, evidence, input);
   const slideMessages = createSlideMessageBuilder(chapterSummaries, argumentTree);
   const slideLayouts = createSlideLayoutSelector(slideMessages, layoutRegistry, chapterLayoutMap);
-  const slideJson = createSlideJsonBuilder(slideLayouts, evidenceMapping);
+  const slideJson = createSlideJsonBuilder(slideLayouts, evidenceMapping, webResearch);
   const layoutRegistryManager = createLayoutRegistryManager(layoutRegistry);
   const contentFitValidation = createContentFitValidator(slideJson, layoutRegistry);
   const slideValidation = createSlideValidation(slideJson, chapterSummaries, layoutRegistry, contentFitValidation);

@@ -1,0 +1,13 @@
+{
+  "order": [
+    "00_orchestrator",
+    "01_theme_interpreter",
+    "02_research_planner",
+    "03_storyline_builder",
+    "04_chapter_designer",
+    "05_issue_analysis_designer",
+    "06_decision_insight_recommender",
+    "07_slide_designer",
+    "08_quality_reviewer"
+  ]
+}

@@ -224,6 +224,10 @@ function commandForPhase(template, phase, context) {
     return { command: npmCommand(), args: ["run", script, ...extraArgs] };
   }
 
+  if (command.startsWith("node ")) {
+    return { command: process.execPath, args: command.replace("node ", "").split(/\s+/).filter(Boolean) };
+  }
+
   throw new Error(`No executable command mapping for phase: ${phase.id}`);
 }
 
@@ -338,8 +342,19 @@ function relativeRunDir(runDir) {
   return path.relative(root, runDir);
 }
 
-function printReviewGate(runDir) {
+function printReviewGate(runDir, template, phaseSet) {
   const relative = relativeRunDir(runDir);
+  const hasConfirmationPhase = (phaseSet.phases || []).some((phase) => phase.id !== "analysis" && phase.requires_confirmation);
+  if (template.id !== "proposal-story" && !hasConfirmationPhase) {
+    const phase = (phaseSet.phases || []).find((item) => item.id === "analysis");
+    console.log("\nTemplate output is ready.");
+    console.log(`Run folder: ${runDir}`);
+    for (const fileName of phase?.outputs || template.outputs || []) {
+      console.log(`- ${path.join(runDir, fileName)}`);
+    }
+    return;
+  }
+
   console.log("\nReview gate: Excel output is ready.");
   console.log("Open and review these files before generating slides:");
   console.log(`- ${path.join(runDir, "proposal_story_analysis.xlsx")}`);
@@ -459,6 +474,16 @@ async function collectApprovalDecision(rl, runDir) {
     const gate = approvalRequest.web_research_gate;
     if (gate) {
       console.log(`- Web evidence: ${gate.confirmed_source_count}/${gate.required_confirmed_sources} confirmed, ${gate.missing_evidence_count} missing`);
+      if (gate.status === "blocked_by_network") {
+        console.log(`- Web status: ${gate.status} (network restrictions likely)`);
+        const diag = gate.diagnostics || {};
+        if (diag.search_fetch_failed || diag.page_fetch_failed) {
+          console.log(`  diagnostics: search_failed=${diag.search_fetch_failed || 0}, page_failed=${diag.page_fetch_failed || 0}`);
+        }
+      }
+    }
+    if (approvalRequest.hint) {
+      console.log(`Hint: ${approvalRequest.hint}`);
     }
   }
 
@@ -471,6 +496,10 @@ async function collectApprovalDecision(rl, runDir) {
   if (workbookDecision) {
     console.log(`Excel decision found: ${workbookDecision.decision}`);
     if (workbookDecision.decision === "approve" && researchIncomplete && !options.allowIncompleteResearch) {
+      const status = approvalRequest.web_research_gate?.status;
+      if (status === "blocked_by_network") {
+        throw new Error("Excel says approve, but Web evidence is blocked by network restrictions. Re-run in a network-enabled environment, or use --allow-incomplete-research to proceed exceptionally.");
+      }
       throw new Error("Excel says approve, but Web research is incomplete. Choose additional_research in Excel or rerun with network access.");
     }
     if (workbookDecision.decision === "approve" && String(workbookDecision.slide_generation || "").toLowerCase() === "no") {
@@ -526,7 +555,7 @@ async function runAnalysisAndStop(template) {
     ? path.join(root, template.output_dir || path.join("outputs", template.id), "YYYYMMDD_HHMMSS")
     : extractRunDir(result.stdout || "");
   if (!runDir) throw new Error("Analysis finished but the run folder was not reported.");
-  printReviewGate(runDir);
+  printReviewGate(runDir, template, phaseSet);
   return runDir;
 }
 
@@ -597,8 +626,16 @@ async function main() {
     if (options.dryRun) {
       console.log(`[dry-run] Would write ${path.relative(root, inputPath)}`);
     } else {
-      writeJson(inputPath, nextInput);
-      console.log(`Updated input: ${path.relative(root, inputPath)}`);
+      try {
+        writeJson(inputPath, nextInput);
+        console.log(`Updated input: ${path.relative(root, inputPath)}`);
+      } catch (error) {
+        if (error.code !== "EPERM" && error.code !== "EACCES") throw error;
+        const runtimeInputPath = path.join(root, "outputs", ".runtime-inputs", `${template.id}.json`);
+        writeJson(runtimeInputPath, nextInput);
+        process.env.CODEX_EASTBOARD_INPUT = runtimeInputPath;
+        console.log(`Updated runtime input: ${path.relative(root, runtimeInputPath)}`);
+      }
     }
 
     await runAnalysisAndStop(template);

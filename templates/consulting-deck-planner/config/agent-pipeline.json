@@ -1,0 +1,60 @@
+{
+  "pipeline_id": "consulting-deck-planner-agent-workflow",
+  "description": "Markdown編集を前提にした経営層向け企画書骨子生成ワークフロー。現行runnerはこの契約に対応するMarkdown成果物を決定的に生成する。",
+  "agents": [
+    {
+      "id": "00_orchestrator",
+      "prompt": "agents/00_orchestrator/prompt.md",
+      "inputs": ["inputs/user-brief.json", "config/agent-order.json"],
+      "outputs": ["agent_workflow.md"]
+    },
+    {
+      "id": "01_theme_interpreter",
+      "prompt": "agents/01_theme_interpreter/prompt.md",
+      "inputs": ["inputs/user-brief.json"],
+      "outputs": ["deck_outline.md"]
+    },
+    {
+      "id": "02_research_planner",
+      "prompt": "agents/02_research_planner/prompt.md",
+      "inputs": ["inputs/user-brief.json", "references/research-workflow.md"],
+      "outputs": ["research_plan.md"]
+    },
+    {
+      "id": "03_storyline_builder",
+      "prompt": "agents/03_storyline_builder/prompt.md",
+      "inputs": ["references/prompt-template.md", "references/chapter-structure.md"],
+      "outputs": ["deck_outline.md"]
+    },
+    {
+      "id": "04_chapter_designer",
+      "prompt": "agents/04_chapter_designer/prompt.md",
+      "inputs": ["references/chapter-structure.md"],
+      "outputs": ["deck_outline.md"]
+    },
+    {
+      "id": "05_issue_analysis_designer",
+      "prompt": "agents/05_issue_analysis_designer/prompt.md",
+      "inputs": ["references/analysis-flow.md"],
+      "outputs": ["deck_outline.md"]
+    },
+    {
+      "id": "06_decision_insight_recommender",
+      "prompt": "agents/06_decision_insight_recommender/prompt.md",
+      "inputs": ["references/output-format.md"],
+      "outputs": ["deck_outline.md"]
+    },
+    {
+      "id": "07_slide_designer",
+      "prompt": "agents/07_slide_designer/prompt.md",
+      "inputs": ["references/layout-selection-rules.md"],
+      "outputs": ["slide_design.md"]
+    },
+    {
+      "id": "08_quality_reviewer",
+      "prompt": "agents/08_quality_reviewer/prompt.md",
+      "inputs": ["deck_outline.md", "slide_design.md"],
+      "outputs": ["review_checklist.md"]
+    }
+  ]
+}

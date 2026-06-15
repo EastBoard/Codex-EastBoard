@@ -14,6 +14,10 @@
     "generate:proposal-story": "node src/run-proposal-story.js",
     "analysis:proposal-story": "node src/run-proposal-story.js --phase analysis",
     "slides:proposal-story": "node src/run-proposal-story.js --phase slides",
+    "run:consulting-deck-planner": "node src/run-consulting-deck-planner.js",
+    "generate:consulting-deck-planner": "node src/run-consulting-deck-planner.js",
+    "analysis:consulting-deck-planner": "node src/run-consulting-deck-planner.js",
+    "check:consulting-deck-planner": "node src/run-consulting-deck-planner.js --check",
     "check": "node src/run-proposal-story.js --check"
   },
   "engines": {

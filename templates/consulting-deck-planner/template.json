@@ -1,0 +1,26 @@
+{
+  "id": "consulting-deck-planner",
+  "name": "経営層向け企画書骨子生成",
+  "description": "テーマからリサーチ観点、企画書骨子、章構成、論点構造、分析、意思決定、示唆、提案、スライド構成までをMarkdownで生成する",
+  "version": "1.0.0",
+  "input": "inputs/user-brief.json",
+  "questions": "questions.json",
+  "phases": "phases.json",
+  "agent_order": "config/agent-order.json",
+  "command": "commands/run-consulting-deck-planner.md",
+  "output_dir": "outputs/consulting-deck-planner",
+  "outputs": [
+    "run_manifest.json",
+    "agent_workflow.md",
+    "research_plan.md",
+    "deck_outline.md",
+    "slide_design.md",
+    "review_checklist.md",
+    "deck.json",
+    "consulting_deck_slides.json",
+    "22_powerpoint_exporter.json",
+    "consulting_deck_slides.pptx",
+    "preview.html",
+    "qa_report.md"
+  ]
+}

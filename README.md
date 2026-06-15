@@ -40,6 +40,7 @@ outputs/
 13. layout_id をレジストリで管理
 14. content_fit_validator で文字数・要素数を検証
 15. 指定PPTXをデザイン参照として保持
+16. 第三階層（根拠・事実）を1枚ずつ分解し、表（入力テンプレ/自動抽出）としてスライド化
 
 ## 起動時のふるまい
 
@@ -197,6 +198,7 @@ templates/<template-id>/
 この実装は、`templates/proposal-story/config/web-research.json` に従ってWeb検索とページ取得を試み、`web_research_plan.json`、`web_research_results.json`、`06_evidence_research.json`、ExcelのWeb調査シートへ結果を出力します。ネットワーク制限、検索エンジン側の応答、取得先サイトの制限により根拠が不足した場合は、Excel確認ゲートで追加調査として扱います。
 
 Web調査が不足している状態では、既定ではPowerPoint生成を承認できません。例外的に進める場合だけ `--allow-incomplete-research` を指定してください。
+ネットワーク制限等で検索自体が失敗した場合は、`web_research_results.json` の `status` が `blocked_by_network` になります。その場合も既定では承認できません。
 
 ```bash
 # 例: Web調査が0/3のままでもスライド生成を進める（非推奨）

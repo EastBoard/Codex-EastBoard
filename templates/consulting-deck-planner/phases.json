@@ -1,0 +1,25 @@
+{
+  "template_id": "consulting-deck-planner",
+  "phases": [
+    {
+      "id": "analysis",
+      "name": "企画書骨子・スライド構成生成",
+      "description": "リサーチ観点、企画書骨子、章構成、論点構造、分析、意思決定、示唆、提案、スライド構成をMarkdownで生成する。",
+      "requires_confirmation": false,
+      "command": "node src/run-consulting-deck-planner.js",
+      "outputs": [
+        "agent_workflow.md",
+        "research_plan.md",
+        "deck_outline.md",
+        "slide_design.md",
+        "review_checklist.md",
+        "deck.json",
+        "consulting_deck_slides.json",
+        "22_powerpoint_exporter.json",
+        "consulting_deck_slides.pptx",
+        "preview.html",
+        "qa_report.md"
+      ]
+    }
+  ]
+}

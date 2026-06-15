@@ -1,0 +1,80 @@
+{
+  "template_id": "consulting-deck-planner",
+  "question_policy": {
+    "principle": "経営判断に必要な企画書骨子から逆算して質問する。未定の回答は仮説として扱い、確認事項に残す。",
+    "unknown_answer": "未定",
+    "instruction_to_user": "わからない項目は「未定」で構いません。Codexが仮説を置き、確認事項として残します。"
+  },
+  "questions": [
+    {
+      "id": "theme",
+      "label": "テーマ",
+      "question": "企画書の主題は何ですか？",
+      "required": true,
+      "target_path": "theme",
+      "default": "生成AI活用支援サービス",
+      "examples": ["生成AI活用支援サービス", "新規SaaS事業", "営業DX施策"],
+      "why": "企画書全体、調査観点、章構成の起点にするため"
+    },
+    {
+      "id": "target_reader",
+      "label": "読み手",
+      "question": "主な読み手・意思決定者は誰ですか？",
+      "required": true,
+      "target_path": "target_reader",
+      "default": "経営層・役員層",
+      "examples": ["経営層・役員層", "事業責任者", "顧客企業の決裁者"],
+      "why": "判断軸、言葉遣い、章の粒度を合わせるため"
+    },
+    {
+      "id": "decision_goal",
+      "label": "意思決定",
+      "question": "この企画書で取りたい意思決定は何ですか？",
+      "required": true,
+      "target_path": "decision_goal",
+      "default": "検討継続と初期予算の承認を得る",
+      "examples": ["Go承認を得る", "PoC予算を得る", "市場参入判断を得る"],
+      "why": "分析、評価、提案を意思決定に接続するため"
+    },
+    {
+      "id": "industry",
+      "label": "業界",
+      "question": "対象市場・業界・顧客セグメントはありますか？",
+      "required": false,
+      "target_path": "industry",
+      "default": "未定",
+      "examples": ["BtoB SaaS", "製造業", "中堅企業", "未定"],
+      "why": "リサーチカテゴリと競合比較の対象を絞るため"
+    },
+    {
+      "id": "company_context",
+      "label": "自社前提",
+      "question": "自社・サービス・事業の前提があれば教えてください。",
+      "required": false,
+      "target_path": "company_context",
+      "default": "未定",
+      "examples": ["既存顧客基盤がある", "AI開発チームがある", "未定"],
+      "why": "勝ち筋と実現可能性の評価に使うため"
+    },
+    {
+      "id": "constraints",
+      "label": "制約",
+      "question": "予算・人員・期限などの制約はありますか？",
+      "required": false,
+      "target_path": "constraints",
+      "default": "未定",
+      "examples": ["3か月で初期案が必要", "既存メンバーで開始", "未定"],
+      "why": "実行計画とリスク評価に反映するため"
+    },
+    {
+      "id": "must_answer",
+      "label": "必須論点",
+      "question": "読み手から必ず聞かれそうな問いは何ですか？",
+      "required": false,
+      "target_path": "must_answer",
+      "default": "市場は伸びるのか、なぜ自社が勝てるのか、いくら儲かるのか",
+      "examples": ["市場は伸びるのか", "なぜ自社が勝てるのか", "失敗時の損失は何か"],
+      "why": "章構成と分析フローの優先順位を決めるため"
+    }
+  ]
+}
