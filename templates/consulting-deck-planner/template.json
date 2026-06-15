@@ -8,6 +8,15 @@
   "phases": "phases.json",
   "agent_order": "config/agent-order.json",
   "command": "commands/run-consulting-deck-planner.md",
+  "knowledge_base": "knowledge",
+  "editable_knowledge": [
+    "knowledge/00_共通ルール",
+    "knowledge/01_企画書",
+    "knowledge/02_リサーチ",
+    "knowledge/04_スライド",
+    "knowledge/05_フレームワーク",
+    "knowledge/99_サンプル"
+  ],
   "output_dir": "outputs/consulting-deck-planner",
   "outputs": [
     "run_manifest.json",
