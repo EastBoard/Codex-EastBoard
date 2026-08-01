@@ -1,0 +1,68 @@
+#!/bin/sh
+# 秘密がコミットに混ざるのを機械で止める
+#
+# ★このリポジトリは GitHub で「公開」である。混ざったら誰でも読める。
+#
+# 登録（クローンごとに1回だけ）: git config core.hooksPath tools/githooks
+# 検査が動いていることを確かめる:  sh tools/githooks/pre-commit --自己検査
+#
+# ★検査の道具が無いときは「黙って通す」のではなく、コミットを止める。
+#   「入っていなければ検査をスキップ」は、守られているように見えて守られていない。
+
+set -u
+
+# --- 自己検査（陽性対照）: 偽の鍵を流して、検知できることを確かめる -------------
+if [ "${1:-}" = "--自己検査" ]; then
+  if ! command -v gitleaks >/dev/null 2>&1; then
+    echo "NG: gitleaks が見つかりません（検査そのものが動きません）" >&2
+    exit 1
+  fi
+  # 本物ではない。検知されることを確かめるためだけの並び。
+  # 行末の gitleaks:allow は、この行自身が検査に引っかかってコミットを止めるのを防ぐため。
+  # ★変数名に日本語は使えない（POSIXシェルの変数名はASCIIのみ）。2026-08-01 に実際に壊した。
+  FAKE_KEY='KEY="AIzaSyA0b1C2d3E4f5G6h7I8j9K0l1M2n3O4p5Q"' # gitleaks:allow
+  if printf '%s\n' "$FAKE_KEY" | gitleaks stdin --no-banner --redact >/dev/null 2>&1; then
+    echo "NG: 偽の鍵を流したのに、検知しませんでした（検査が空振りしています）" >&2
+    exit 1
+  fi
+  echo "OK: 偽の鍵を検知しました。検査は動いています（gitleaks $(gitleaks version)）"
+  exit 0
+fi
+
+# --- 道具が無ければ止める -------------------------------------------------------
+if ! command -v gitleaks >/dev/null 2>&1; then
+  cat >&2 <<'EOM'
+
+  コミットを止めました。検査の道具 gitleaks が見つかりません。
+
+  検査できないものは通しません。
+
+  入れ方（1回だけ）:
+      winget install -e --id Gitleaks.Gitleaks
+    そのあと、ターミナルを開き直してください（PATH が更新されます）
+
+EOM
+  exit 1
+fi
+
+# --- 本番の検査: これからコミットする中身だけを見る ------------------------------
+# -v が要る。付けないと「leaks found: 1」としか出ず、どのファイルの何行目かが分からない。
+if ! gitleaks git --staged --no-banner --redact -v; then
+  cat >&2 <<'EOM'
+
+  コミットを止めました。秘密らしい文字列が含まれています。
+
+  上に出ている Finding の File / Line を見て、その値をファイルから消してください。
+  値そのものは伏せてあります（--redact）。
+
+  もし誤検知だったときは、その行の末尾に  gitleaks:allow  と書き足すと通ります。
+  ただし、本当に誤検知かを確かめてから使ってください。
+
+  ★このリポジトリは公開です。すでに送ってしまった鍵は、この検査では消えません。
+    履歴に残るため、対処の本命は「鍵そのものの無効化」です。
+
+EOM
+  exit 1
+fi
+
+exit 0

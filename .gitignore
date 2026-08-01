@@ -2,6 +2,14 @@ node_modules/
 outputs/*
 !outputs/.gitkeep
 PendingApproval/
+
+# 秘密情報はGitに入れない（2026-08-01）
+# ★このリポジトリは公開である。混ざったら誰でも読める。
+# ★スラッシュを含む指定は、書いたその階層にしか効かない。奥まで効かせるには **/ が要る。
 .env
+*.env
+.env.*
+**/.claude/settings.local.json
+
 .DS_Store
 Thumbs.db
